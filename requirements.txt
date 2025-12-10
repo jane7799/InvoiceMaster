@@ -1,0 +1,6 @@
+PyQt6
+pdfplumber
+pandas
+requests
+openpyxl
+pymupdf
