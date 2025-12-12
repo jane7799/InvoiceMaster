@@ -17,12 +17,18 @@ from license_manager import LicenseManager
 # 屏蔽 SSL 警告
 warnings.filterwarnings("ignore", category=UserWarning, module='urllib3')
 
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
-    QListWidget, QListWidgetItem, QMessageBox, QDialog, QLineEdit, QComboBox, QSpinBox, QCheckBox, QRadioButton, QButtonGroup,
-    QProgressBar, QFrame, QScrollArea, QToolButton, QAbstractItemView, QGraphicsDropShadowEffect, QSizePolicy, QStackedWidget, QInputDialog)
-from PyQt6.QtCore import Qt, QTimer, QSettings, QSize, QRect, QPointF, QPoint, QPropertyAnimation, QEasingCurve, pyqtSignal, QByteArray
-from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QFont, QIcon, QDragEnterEvent, QDropEvent, QPalette, QBrush, QTransform, QPageLayout
-from PyQt6.QtPrintSupport import QPrinter, QPrintDialog, QPrinterInfo
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                             QHBoxLayout, QPushButton, QLabel, QFileDialog, 
+                             QListWidget, QListWidgetItem, QMessageBox, QSplitter,
+                             QComboBox, QSpinBox, QGroupBox, QSplashScreen, 
+                             QDialog, QLineEdit, QFormLayout, QFrame, QCheckBox,
+                             QRadioButton, QButtonGroup, QAbstractItemView, 
+                             QGraphicsDropShadowEffect, QSizePolicy, QMenu, 
+                             QScrollArea, QStackedWidget, QInputDialog, QProgressBar,
+                             QToolButton)
+from PyQt6.QtCore import Qt, QSettings, QSize, QMimeData, pyqtSignal, QByteArray, QRectF, QPointF, QTimer, QEvent
+from PyQt6.QtGui import QPixmap, QIcon, QDragEnterEvent, QDropEvent, QImage, QColor, QPainter, QPalette, QPen, QFont, QAction, QCursor, QPageLayout, QTransform
+from PyQt6.QtPrintSupport import QPrinterInfo, QPageSetupDialog, QPrinter, QPrintDialog
 
 # ==========================================
 # 全局配置
@@ -1388,60 +1394,16 @@ class AboutDialog(QDialog):
         
         def make_qr(path, t, icon):
             real_path = resource_path(path)
-            w = QWidget()
-            wl = QVBoxLayout(w)
-            wl.setContentsMargins(0, 0, 0, 0)
-            wl.setSpacing(12)
-            wl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            
-            IMG_SIZE = 130
-            CONT_SIZE = IMG_SIZE + 20
-            
-            l = QLabel()
-            l.setFixedSize(CONT_SIZE, CONT_SIZE)
-            l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            l.setStyleSheet("""
-                background: white;
-                border: 2px solid #E2E8F0;
-                border-radius: 12px;
-                padding: 8px;
-            """)
-            
-            if os.path.exists(real_path):
-                l.setPixmap(QPixmap(real_path).scaled(
-                    IMG_SIZE, IMG_SIZE,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                ))
-            else:
-                l.setText(icon)
-                l.setStyleSheet("""
-                    background: #F1F5F9;
-                    border: 2px solid #CBD5E1;
-                    border-radius: 12px;
-                    color: #94A3B8;
-                    font-size: 48px;
-                """)
-            
-            tl = QLabel(t)
-            tl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            tl.setStyleSheet("""
-                color: #1E293B;
-                font-size: 14px;
-                font-weight: 600;
-            """)
-            
-            wl.addWidget(l)
-            wl.addWidget(tl)
-            return w
-        
-        qr_layout.addWidget(make_qr(resource_path("qr1.jpg"), "打赏", "💰"))
-        qr_layout.addWidget(make_qr(resource_path("qr2.jpg"), "加好友", "👋"))
-        
-        content_layout.addWidget(qr_card)
-        content_layout.addStretch()
-        
-        layout.addWidget(content)
+            w = QWidget(); wl = QVBoxLayout(w); wl.setContentsMargins(0,0,0,0); wl.setSpacing(10); wl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            IMG_SIZE = 140; CONT_SIZE = IMG_SIZE + 10
+            l = QLabel(); l.setFixedSize(CONT_SIZE, CONT_SIZE); l.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            l.setStyleSheet("background:white; border:1px solid #ddd; border-radius:8px")
+            if os.path.exists(real_path): l.setPixmap(QPixmap(real_path).scaled(IMG_SIZE, IMG_SIZE, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            else: l.setText(t); l.setStyleSheet(f"background:#f0f0f0; border:1px solid #ccc; border-radius:8px; color:#999; font-size:14px; qproperty-alignment: AlignCenter;")
+            tl = QLabel(t); tl.setAlignment(Qt.AlignmentFlag.AlignCenter); tl.setStyleSheet("color:#333; font-size:14px; font-weight:bold;")
+            wl.addWidget(l); wl.addWidget(tl); return w
+        qr_layout.addWidget(make_qr(resource_path("qr1.jpg"), "打赏")); qr_layout.addWidget(make_qr(resource_path("qr2.jpg"), "加好友"))
+        layout.addWidget(txt); layout.addLayout(qr_layout)
 
 class HandScrollArea(QScrollArea):
     def __init__(self, parent_widget):
