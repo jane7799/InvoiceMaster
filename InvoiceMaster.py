@@ -1403,7 +1403,7 @@ class AboutDialog(QDialog):
             else: l.setText(t); l.setStyleSheet(f"background:#f0f0f0; border:1px solid #ccc; border-radius:8px; color:#999; font-size:14px; qproperty-alignment: AlignCenter;")
             tl = QLabel(t); tl.setAlignment(Qt.AlignmentFlag.AlignCenter); tl.setStyleSheet("color:#333; font-size:14px; font-weight:bold;")
             wl.addWidget(l); wl.addWidget(tl); return w
-        qr_layout.addWidget(make_qr(resource_path("qr1.jpg"), "打赏")); qr_layout.addWidget(make_qr(resource_path("qr2.jpg"), "加好友"))
+        qr_layout.addWidget(make_qr(resource_path("qr1.jpg"), "打赏", "💰")); qr_layout.addWidget(make_qr(resource_path("qr2.jpg"), "加好友", "👋"))
         layout.addWidget(txt); layout.addLayout(qr_layout)
 
 class HandScrollArea(QScrollArea):
