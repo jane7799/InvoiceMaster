@@ -10,6 +10,8 @@ import fitz  # PyMuPDF
 import platform
 import gc
 import warnings
+import logging
+from logging.handlers import RotatingFileHandler
 
 # 屏蔽 SSL 警告
 warnings.filterwarnings("ignore", category=UserWarning, module='urllib3')
@@ -38,6 +40,64 @@ def resource_path(relative_path):
     try: base_path = sys._MEIPASS
     except Exception: base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
+# ==========================================
+# 日志管理器
+# ==========================================
+class LogManager:
+    @staticmethod
+    def get_log_directory():
+        """获取跨平台日志目录"""
+        system = platform.system()
+        if system == "Windows":
+            base = os.environ.get('APPDATA', os.path.expanduser('~'))
+            return os.path.join(base, 'InvoiceMaster', 'logs')
+        elif system == "Darwin":  # macOS
+            return os.path.expanduser('~/Library/Logs/InvoiceMaster')
+        else:  # Linux/UOS
+            return os.path.expanduser('~/.local/share/InvoiceMaster/logs')
+    
+    @staticmethod
+    def setup_logging():
+        """配置日志系统"""
+        try:
+            # 创建日志目录
+            log_dir = LogManager.get_log_directory()
+            os.makedirs(log_dir, exist_ok=True)
+            
+            log_file = os.path.join(log_dir, 'invoice_master.log')
+            
+            # 文件处理器（带轮转）
+            file_handler = RotatingFileHandler(
+                log_file,
+                maxBytes=10*1024*1024,  # 10 MB
+                backupCount=5,
+                encoding='utf-8'
+            )
+            file_handler.setLevel(logging.INFO)
+            
+            # 控制台处理器
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.WARNING)  # 控制台只显示警告及以上
+            
+            # 设置格式
+            formatter = logging.Formatter(
+                '%(asctime)s [%(levelname)s] %(name)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            file_handler.setFormatter(formatter)
+            console_handler.setFormatter(formatter)
+            
+            # 配置根日志记录器
+            logger = logging.getLogger()
+            logger.setLevel(logging.INFO)
+            logger.addHandler(file_handler)
+            logger.addHandler(console_handler)
+            
+            return logger
+        except Exception as e:
+            print(f"日志系统初始化失败: {e}")
+            return logging.getLogger()
 
 # ==========================================
 # 0. 图标资源
@@ -185,16 +245,24 @@ class InvoiceHelper:
         return amount, date
     @staticmethod
     def ocr(fp, ak, sk):
-        if not ak: return {}
+        logger = logging.getLogger(__name__)
+        if not ak:
+            logger.warning("OCR 未配置 API Key")
+            return {}
         try:
+            logger.info(f"OCR 识别开始: {os.path.basename(fp)}")
             t = requests.get(f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={ak}&client_secret={sk}").json().get("access_token")
             with open(fp,'rb') as f: b = base64.b64encode(f.read()).decode()
             r = requests.post(f"https://aip.baidubce.com/rest/2.0/ocr/v1/vat_invoice?access_token={t}", data={"image":b}, headers={'content-type':'application/x-www-form-urlencoded'}).json()
             wr = r.get("words_result", {})
             items = wr.get("CommodityName", [])
             item_str = ",".join([x.get("word","") for x in items]) if isinstance(items, list) else str(items)
-            return { "date": wr.get("InvoiceDate", ""), "amount": float(wr.get("AmountInFiguers", "0")), "seller": wr.get("SellerName", ""), "code": wr.get("InvoiceCode", ""), "number": wr.get("InvoiceNum", ""), "item_name": item_str, "tax_amt": wr.get("TotalTax", "") }
-        except: return {}
+            result = { "date": wr.get("InvoiceDate", ""), "amount": float(wr.get("AmountInFiguers", "0")), "seller": wr.get("SellerName", ""), "code": wr.get("InvoiceCode", ""), "number": wr.get("InvoiceNum", ""), "item_name": item_str, "tax_amt": wr.get("TotalTax", "") }
+            logger.info(f"OCR 识别成功: {os.path.basename(fp)}, 金额: {result.get('amount', 0)}")
+            return result
+        except Exception as e:
+            logger.error(f"OCR 识别失败: {os.path.basename(fp)}, 错误: {str(e)}")
+            return {}
 
 class PDFEngine:
     SIZES = {"A4":(595,842), "A5":(420,595), "B5":(499,709)}
@@ -246,14 +314,20 @@ class PDFEngine:
 class PrinterEngine:
     @staticmethod
     def print_pdf(pdf_path, printer, copies=1, force_rotate=False):
+        logger = logging.getLogger(__name__)
+        logger.info(f"开始打印: {os.path.basename(pdf_path)}, 份数: {copies}, DPI: 450")
         try:
-            printer.setCopyCount(copies); printer.setResolution(300); printer.setFullPage(True)
+            printer.setCopyCount(copies); printer.setResolution(450); printer.setFullPage(True)
             with fitz.open(pdf_path) as doc:
                 painter = QPainter()
-                if not painter.begin(printer): return False, "无法启动打印任务"
+                if not painter.begin(printer):
+                    logger.error("无法启动打印任务")
+                    return False, "无法启动打印任务"
                 for i, page in enumerate(doc):
                     if i > 0: printer.newPage()
-                    pix = page.get_pixmap(matrix=fitz.Matrix(3.0, 3.0)); img = QImage.fromData(pix.tobytes("ppm"))
+                    # [V4.0] 优化渲染质量和速度平衡
+                    pix = page.get_pixmap(matrix=fitz.Matrix(3.5, 3.5), alpha=False)
+                    img = QImage.fromData(pix.tobytes("ppm"))
                     
                     # 永远纵向
                     printer.setPageOrientation(QPageLayout.Orientation.Portrait)
@@ -270,15 +344,19 @@ class PrinterEngine:
                     except: safe_rect = page_rect
 
                     target_w = int(safe_rect.width()); target_h = int(safe_rect.height())
-                    scaled_img = img.scaled(target_w, target_h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    # [V4.0] 使用 FastTransformation 加速，最终打印时打印机会平滑处理
+                    scaled_img = img.scaled(target_w, target_h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation)
                     
                     x = int(safe_rect.x() + (safe_rect.width() - scaled_img.width()) / 2)
                     y = int(safe_rect.y() + (safe_rect.height() - scaled_img.height()) / 2)
                     
                     painter.drawImage(x, y, scaled_img)
                 painter.end()
+            logger.info(f"打印任务发送成功: {os.path.basename(pdf_path)}")
             return True, "发送成功"
-        except Exception as e: return False, str(e)
+        except Exception as e:
+            logger.error(f"打印失败: {os.path.basename(pdf_path)}, 错误: {str(e)}", exc_info=True)
+            return False, str(e)
 
 # ==========================================
 # 3. UI 组件
@@ -596,7 +674,7 @@ class MainWindow(QMainWindow):
         self.settings_layout.addWidget(QLabel("打印设置", objectName="Title"))
         
         r_pr = QHBoxLayout(); self.cb_pr = QComboBox(); self.cb_pr.addItem("🖥️ 默认打印机/PDF")
-        if platform.system() == "Windows": 
+        if platform.system() in ["Windows", "Linux"]: 
             for p in QPrinterInfo.availablePrinterNames(): self.cb_pr.addItem(f"🖨️ {p}")
         self.cb_pr.currentIndexChanged.connect(self.on_printer_changed)
         
@@ -746,8 +824,11 @@ class MainWindow(QMainWindow):
         self.word_preview.show_pages(page_imgs)
 
     def add_files(self, fs):
+        logger = logging.getLogger(__name__)
+        logger.info(f"开始添加 {len(fs)} 个文件")
         s=QSettings("MySoft","InvoiceMaster"); ak,sk=s.value("ak"),s.value("sk")
         for f in fs:
+            logger.info(f"添加文件: {os.path.basename(f)}")
             d = {"p":f, "n":os.path.basename(f), "d":"", "a":0.0, "ext": {}}
             item = QListWidgetItem(self.list); item.setSizeHint(QSize(250, 60))
             widget = InvoiceItemWidget(d, item, self.delete_specific_item); self.list.setItemWidget(item, widget)
@@ -760,6 +841,7 @@ class MainWindow(QMainWindow):
                     if "date" in r: d["d"]=r["date"]
                     d["ext"] = r
             self.data.append(d); widget.update_display(d)
+        logger.info(f"文件添加完成，共 {len(self.data)} 个发票")
         self.calc(); self.show_layout_preview()
     def calc(self): t=sum(x["a"] for x in self.data); self.lbl_inf.setText(f"{len(self.data)} 张发票"); self.lbl_tot.setText(f"¥ {t:,.2f}")
     def clear(self): self.list.clear(); self.data=[]; self.calc(); self.trigger_refresh()
@@ -768,16 +850,107 @@ class MainWindow(QMainWindow):
         for r in sorted([self.list.row(i) for i in self.list.selectedItems()], reverse=True): self.list.takeItem(r); self.data.pop(r)
         self.calc(); self.trigger_refresh()
     def xls(self):
+        logger = logging.getLogger(__name__)
         if not self.data: return
-        p, _ = QFileDialog.getSaveFileName(self, "Save", "invoice_report.xlsx", "Excel (*.xlsx)")
-        if p:
+        
+        logger.info(f"开始导出 Excel: {len(self.data)} 条数据")
+        
+        # 读取上次保存的路径
+        s = QSettings("MySoft", "InvoiceMaster")
+        last_path = s.value("last_excel_path", os.path.expanduser("~/Desktop/invoice_report.xlsx"))
+        
+        # 使用上次路径作为默认值
+        p, _ = QFileDialog.getSaveFileName(self, "保存 Excel 报表", last_path, "Excel (*.xlsx)")
+        if not p: return
+        
+        # 保存路径供下次使用
+        s.setValue("last_excel_path", p)
+        
+        try:
+            # 准备新数据
+            new_rows = []
+            for x in self.data:
+                ext = x.get("ext", {})
+                new_rows.append({
+                    "开票日期": x.get("d", ""), 
+                    "发票代码": ext.get("code", ""), 
+                    "发票号码": ext.get("number", ""), 
+                    "销售方名称": ext.get("seller", ""), 
+                    "价税合计": x.get("a", 0), 
+                    "文件路径": x.get("p", "")
+                })
+            
+            new_df = pd.DataFrame(new_rows)
+            
+            # 如果文件已存在，读取并追加
+            if os.path.exists(p):
+                try:
+                    existing_df = pd.read_excel(p)
+                    combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+                    is_append = True
+                except:
+                    combined_df = new_df
+                    is_append = False
+            else:
+                combined_df = new_df
+                is_append = False
+            
+            # 保存到 Excel
+            combined_df.to_excel(p, index=False, engine='openpyxl')
+            
+            # 使用 openpyxl 添加颜色标记
             try:
-                rows = []
-                for x in self.data:
-                    ext = x.get("ext", {})
-                    rows.append({"开票日期": x.get("d",""), "发票代码": ext.get("code",""), "发票号码": ext.get("number",""), "销售方名称": ext.get("seller",""), "价税合计": x.get("a",0), "文件路径": x.get("p","")})
-                pd.DataFrame(rows).to_excel(p, index=False); QMessageBox.information(self,"OK","详细报表已导出！")
-            except Exception as e: QMessageBox.critical(self,"Err",str(e))
+                from openpyxl import load_workbook
+                from openpyxl.styles import PatternFill
+                
+                wb = load_workbook(p)
+                ws = wb.active
+                
+                # 检测重复的发票号码（第3列，索引为C）
+                invoice_numbers = {}
+                duplicate_rows = set()
+                
+                for row_idx in range(2, ws.max_row + 1):  # 从第2行开始（跳过表头）
+                    invoice_num = ws.cell(row=row_idx, column=3).value  # 发票号码列
+                    if invoice_num and str(invoice_num).strip():  # 非空
+                        if invoice_num in invoice_numbers:
+                            duplicate_rows.add(row_idx)
+                            duplicate_rows.add(invoice_numbers[invoice_num])
+                        else:
+                            invoice_numbers[invoice_num] = row_idx
+                
+                # 为重复行添加黄色背景
+                yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                for row_idx in duplicate_rows:
+                    for col_idx in range(1, ws.max_column + 1):
+                        ws.cell(row=row_idx, column=col_idx).fill = yellow_fill
+                
+                wb.save(p)
+                
+                # 提示信息
+                if is_append:
+                    msg = f"✅ 已追加 {len(new_df)} 条数据到现有文件！\n"
+                    logger.info(f"Excel 追加成功: {p}, 新增 {len(new_df)} 条")
+                else:
+                    msg = f"✅ 已导出 {len(new_df)} 条数据！\n"
+                    logger.info(f"Excel 导出成功: {p}, 共 {len(new_df)} 条")
+                
+                if duplicate_rows:
+                    msg += f"⚠️ 检测到 {len(duplicate_rows)} 条重复发票（已用黄色标记）"
+                    logger.warning(f"检测到 {len(duplicate_rows)} 条重复发票")
+                else:
+                    msg += "✓ 未检测到重复发票"
+                
+                QMessageBox.information(self, "导出成功", msg)
+                
+            except Exception as e:
+                # 如果颜色标记失败，至少数据已保存
+                logger.warning(f"Excel 颜色标记失败: {str(e)}")
+                QMessageBox.information(self, "导出成功", f"数据已导出，但颜色标记失败: {str(e)}")
+                
+        except Exception as e:
+            logger.error(f"Excel 导出失败: {str(e)}", exc_info=True)
+            QMessageBox.critical(self, "导出失败", f"错误: {str(e)}")
     def run(self):
         if not self.data: return QMessageBox.warning(self,"Tips","请先添加发票")
         self.btn_go.setText("处理中..."); QApplication.processEvents()
@@ -790,8 +963,12 @@ class MainWindow(QMainWindow):
         try:
             PDFEngine.merge([x["p"] for x in self.data], m, paper, o, self.chk_cut.isChecked(), out)
             if self.cb_pr.currentIndex() == 0:
-                if platform.system() == "Windows": os.startfile(out, "print") 
-                else: os.system(f"open '{out}'")
+                if platform.system() == "Windows": 
+                    os.startfile(out, "print") 
+                elif platform.system() == "Darwin":  # macOS
+                    os.system(f"open '{out}'")
+                else:  # Linux/UOS
+                    os.system(f"xdg-open '{out}'")
                 self.btn_go.setText(" 开始打印")
             else:
                 p_name = self.cb_pr.currentText().replace("🖨️ ", ""); copies = self.sp_cpy.value(); self.btn_go.setText(f"正在发送至 {p_name}...")
@@ -806,7 +983,33 @@ class MainWindow(QMainWindow):
         except Exception as e: self.btn_go.setText("重试"); QMessageBox.critical(self,"Error",str(e))
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    splash = DynamicSplashScreen(); splash.show()
-    w = MainWindow(); splash.finished.connect(lambda: [splash.close(), w.show()])
-    sys.exit(app.exec())
+    # 初始化日志系统
+    logger = LogManager.setup_logging()
+    logger.info("=" * 60)
+    logger.info(f"应用启动 - {APP_NAME} {APP_VERSION}")
+    logger.info(f"系统: {platform.system()} {platform.release()}")
+    logger.info(f"Python: {sys.version.split()[0]}")
+    logger.info(f"日志目录: {LogManager.get_log_directory()}")
+    logger.info("=" * 60)
+    
+    # 全局异常处理
+    def exception_hook(exc_type, exc_value, exc_traceback):
+        logger.critical(
+            "未捕获的异常",
+            exc_info=(exc_type, exc_value, exc_traceback)
+        )
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+    
+    sys.excepthook = exception_hook
+    
+    try:
+        app = QApplication(sys.argv)
+        splash = DynamicSplashScreen(); splash.show()
+        w = MainWindow(); splash.finished.connect(lambda: [splash.close(), w.show()])
+        logger.info("主窗口创建成功")
+        exit_code = app.exec()
+        logger.info(f"应用正常退出，退出码: {exit_code}")
+        sys.exit(exit_code)
+    except Exception as e:
+        logger.critical(f"应用启动失败: {str(e)}", exc_info=True)
+        sys.exit(1)
