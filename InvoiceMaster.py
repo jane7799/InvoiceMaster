@@ -37,6 +37,58 @@ APP_VERSION = "V1.0.0"
 APP_NAME = "智能发票打印助手"
 APP_AUTHOR_CN = "© 会钓鱼的猫" 
 
+# ==========================================
+# 平台自适应UI配置
+# ==========================================
+def _detect_platform():
+    """检测平台并返回UI配置"""
+    system = platform.system()
+    
+    # 默认配置(现代平台)
+    config = {
+        "use_animations": True,
+        "use_gradients": True,
+        "shadow_blur": 25,
+        "shadow_opacity": 25,
+        "is_legacy": False,
+        "platform_name": system
+    }
+    
+    if system == "Windows":
+        try:
+            import sys
+            ver = sys.getwindowsversion()
+            # Win7: major=6, minor=1
+            # Win10: major=10
+            if ver.major == 6 and ver.minor <= 1:
+                # Windows 7 或更早版本 - 简化UI
+                config.update({
+                    "use_animations": False,
+                    "use_gradients": False,
+                    "shadow_blur": 10,
+                    "shadow_opacity": 15,
+                    "is_legacy": True,
+                    "platform_name": "Windows 7"
+                })
+            else:
+                config["platform_name"] = "Windows 10+"
+        except:
+            pass
+    elif system == "Linux":
+        # 统信等Linux系统 - 中等配置
+        config.update({
+            "use_animations": True,
+            "use_gradients": True,
+            "shadow_blur": 15,
+            "shadow_opacity": 20,
+            "platform_name": "Linux/UOS"
+        })
+    
+    return config
+
+# 初始化平台配置
+UI_CONFIG = _detect_platform() 
+
 def resource_path(relative_path):
     try: base_path = sys._MEIPASS
     except Exception: base_path = os.path.abspath(".")
@@ -203,13 +255,14 @@ class ThemeManager:
         
         QToolButton#LayoutCard {
             background-color: white;
-            border: 2px solid #E2E8F0;
-            border-radius: 8px;
-            padding: 2px;
+            border: 2px solid #CBD5E1;
+            border-radius: 12px;
+            padding: 4px;
         }
         QToolButton#LayoutCard:hover {
-            border-color: #2563EB;
+            border-color: #3B82F6;
             background-color: #EFF6FF;
+            border-width: 2px;
         }
         QToolButton#LayoutCard:checked {
             border: 3px solid #2563EB;
@@ -477,7 +530,28 @@ class InvoiceHelper:
             wr = r.get("words_result", {})
             items = wr.get("CommodityName", [])
             item_str = ",".join([x.get("word","") for x in items]) if isinstance(items, list) else str(items)
-            result = { "date": wr.get("InvoiceDate", ""), "amount": float(wr.get("AmountInFiguers", "0")), "seller": wr.get("SellerName", ""), "code": wr.get("InvoiceCode", ""), "number": wr.get("InvoiceNum", ""), "item_name": item_str, "tax_amt": wr.get("TotalTax", "") }
+            # 获取税率列表
+            tax_rates = wr.get("CommodityTaxRate", [])
+            tax_rate_str = ",".join([x.get("word","") for x in tax_rates]) if isinstance(tax_rates, list) else str(tax_rates)
+            # 扩展字段:18个专业字段
+            result = { 
+                "date": wr.get("InvoiceDate", ""),  # 开票日期
+                "amount": float(wr.get("AmountInFiguers", "0") or "0"),  # 价税合计
+                "amount_without_tax": wr.get("TotalAmount", ""),  # 不含税金额
+                "tax_amt": wr.get("TotalTax", ""),  # 税额
+                "tax_rate": tax_rate_str,  # 税率
+                "seller": wr.get("SellerName", ""),  # 销售方名称
+                "seller_tax_id": wr.get("SellerRegisterNum", ""),  # 销售方税号
+                "buyer": wr.get("PurchaserName", ""),  # 购买方名称
+                "buyer_tax_id": wr.get("PurchaserRegisterNum", ""),  # 购买方税号
+                "code": wr.get("InvoiceCode", ""),  # 发票代码
+                "number": wr.get("InvoiceNum", ""),  # 发票号码
+                "check_code": wr.get("CheckCode", ""),  # 校验码
+                "invoice_type": wr.get("InvoiceType", ""),  # 发票类型
+                "item_name": item_str,  # 商品明细
+                "remark": wr.get("Remarks", ""),  # 备注
+                "machine_code": wr.get("MachineCode", ""),  # 机器编号
+            }
             logger.info(f"OCR 识别成功: {os.path.basename(fp)}, 金额: {result.get('amount', 0)}")
             return result
         except Exception as e:
@@ -595,16 +669,81 @@ class PrinterEngine:
 class Card(QFrame):
     def __init__(self):
         super().__init__(); self.setObjectName("Card")
-        eff = QGraphicsDropShadowEffect(); eff.setBlurRadius(15); eff.setColor(QColor(0,0,0,15)); eff.setOffset(0,2); self.setGraphicsEffect(eff)
+        # 使用平台自适应阴影配置
+        blur = UI_CONFIG.get("shadow_blur", 25)
+        opacity = UI_CONFIG.get("shadow_opacity", 25)
+        eff = QGraphicsDropShadowEffect(); eff.setBlurRadius(blur); eff.setColor(QColor(0,0,0,opacity)); eff.setOffset(0,4 if not UI_CONFIG.get("is_legacy") else 2); self.setGraphicsEffect(eff)
 
 class DragArea(QLabel):
     dropped = pyqtSignal(list)
     def __init__(self):
-        super().__init__(); self.setAlignment(Qt.AlignmentFlag.AlignCenter); self.setAcceptDrops(True); self.setMinimumHeight(100)
-        self.setStyleSheet("border: 2px dashed #cfd8dc; border-radius: 8px; background: transparent;")
-    def upd(self, c): self.setPixmap(Icons.get("upload", c).pixmap(48,48))
-    def dragEnterEvent(self, e): e.accept()
-    def dropEvent(self, e): self.dropped.emit([u.toLocalFile() for u in e.mimeData().urls() if u.toLocalFile().lower().endswith(('.pdf','.jpg','.png'))])
+        super().__init__()
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setAcceptDrops(True)
+        self.setMinimumHeight(120)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._hover = False
+        self._update_style()
+        
+    def _update_style(self):
+        use_gradients = UI_CONFIG.get("use_gradients", True)
+        
+        if self._hover:
+            if use_gradients:
+                bg = """background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 rgba(37, 99, 235, 0.15),
+                        stop:1 rgba(37, 99, 235, 0.05));"""
+            else:
+                bg = "background: rgba(37, 99, 235, 0.1);"
+            self.setStyleSheet(f"""
+                QLabel {{
+                    border: 2px dashed #2563EB;
+                    border-radius: 12px;
+                    {bg}
+                }}
+            """)
+        else:
+            if use_gradients:
+                bg = """background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 rgba(148, 163, 184, 0.08),
+                        stop:1 rgba(148, 163, 184, 0.02));"""
+            else:
+                bg = "background: rgba(148, 163, 184, 0.05);"
+            self.setStyleSheet(f"""
+                QLabel {{
+                    border: 2px dashed #94A3B8;
+                    border-radius: 12px;
+                    {bg}
+                }}
+            """)
+    
+    def upd(self, c): 
+        self.setPixmap(Icons.get("upload", c if not self._hover else "#2563EB").pixmap(56, 56))
+    
+    def enterEvent(self, e):
+        self._hover = True
+        self._update_style()
+        self.upd("#2563EB")
+        
+    def leaveEvent(self, e):
+        self._hover = False
+        self._update_style()
+        self.upd("#94A3B8")
+        
+    def dragEnterEvent(self, e):
+        self._hover = True
+        self._update_style()
+        e.accept()
+        
+    def dragLeaveEvent(self, e):
+        self._hover = False
+        self._update_style()
+        
+    def dropEvent(self, e):
+        self._hover = False
+        self._update_style()
+        self.dropped.emit([u.toLocalFile() for u in e.mimeData().urls() if u.toLocalFile().lower().endswith(('.pdf','.jpg','.png'))])
+        
     def mousePressEvent(self, e): 
         fs, _ = QFileDialog.getOpenFileNames(self, "添加发票", "", "发票文件 (*.pdf *.jpg *.png)")
         if fs: self.dropped.emit(fs)
@@ -1320,25 +1459,44 @@ class AboutDialog(QDialog):
         title = QLabel(f"{APP_NAME}")
         title.setStyleSheet("""
             font-size: 22px;
-        header_layout.setContentsMargins(40, 40, 40, 40)
-        header_layout.setSpacing(10)
-        
-        title = QLabel("智能发票打印助手")
-        title.setStyleSheet("color: white; font-size: 32px; font-weight: bold;")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        version = QLabel("V1.0.0 · © 会钓鱼的猫")
-        version.setStyleSheet("color: rgba(255,255,255,0.9); font-size: 16px;")
-        version.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
+            font-weight: 700;
+            color: white;
+            background: transparent;
+        """)
         header_layout.addWidget(title)
-        header_layout.addWidget(version)
-        header_layout.addStretch()
+        
+        subtitle = QLabel(f"{APP_VERSION} · {APP_AUTHOR_CN}")
+        subtitle.setStyleSheet("""
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.9);
+            background: transparent;
+        """)
+        header_layout.addWidget(subtitle)
         
         layout.addWidget(header)
         
-        # 文字说明
-        text_layout = QVBoxLayout()
+        # 内容区域
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(30, 30, 30, 30)
+        content_layout.setSpacing(20)
+        
+        # 说明文字卡片
+        text_card = QFrame()
+        text_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+            }
+        """)
+        
+        text_shadow = QGraphicsDropShadowEffect()
+        text_shadow.setBlurRadius(20)
+        text_shadow.setColor(QColor(0, 0, 0, 30))
+        text_shadow.setOffset(0, 2)
+        text_card.setGraphicsEffect(text_shadow)
+        
+        text_layout = QVBoxLayout(text_card)
         text_layout.setContentsMargins(20, 20, 20, 20)
         text_layout.setSpacing(10)
         
@@ -1346,20 +1504,28 @@ class AboutDialog(QDialog):
         txt.setAlignment(Qt.AlignmentFlag.AlignCenter)
         txt.setWordWrap(True)
         txt.setStyleSheet("""
-            color: #666;
-            font-size: 14px;
-            line-height: 1.6;
-            padding: 10px;
+            color: #64748B;
+            font-size: 13px;
+            line-height: 24px;
         """)
+        text_layout.addWidget(txt)
+        
+        content_layout.addWidget(text_card)
         
         # 二维码卡片
-        qr_card = QWidget()
+        qr_card = QFrame()
         qr_card.setStyleSheet("""
-            QWidget {
-                background: white;
+            QFrame {
+                background-color: white;
                 border-radius: 12px;
             }
         """)
+        
+        qr_shadow = QGraphicsDropShadowEffect()
+        qr_shadow.setBlurRadius(20)
+        qr_shadow.setColor(QColor(0, 0, 0, 30))
+        qr_shadow.setOffset(0, 2)
+        qr_card.setGraphicsEffect(qr_shadow)
         
         qr_layout = QHBoxLayout(qr_card)
         qr_layout.setContentsMargins(20, 20, 20, 20)
@@ -1372,17 +1538,14 @@ class AboutDialog(QDialog):
             IMG_SIZE = 140; CONT_SIZE = IMG_SIZE + 10
             l = QLabel(); l.setFixedSize(CONT_SIZE, CONT_SIZE); l.setAlignment(Qt.AlignmentFlag.AlignCenter)
             l.setStyleSheet("background:white; border:1px solid #ddd; border-radius:8px")
-            if os.path.exists(real_path): 
-                pixmap = QPixmap(real_path)
-                l.setPixmap(pixmap.scaled(IMG_SIZE, IMG_SIZE, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            if os.path.exists(real_path): l.setPixmap(QPixmap(real_path).scaled(IMG_SIZE, IMG_SIZE, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
             else: l.setText(t); l.setStyleSheet(f"background:#f0f0f0; border:1px solid #ccc; border-radius:8px; color:#999; font-size:14px; qproperty-alignment: AlignCenter;")
             tl = QLabel(t); tl.setAlignment(Qt.AlignmentFlag.AlignCenter); tl.setStyleSheet("color:#333; font-size:14px; font-weight:bold;")
             wl.addWidget(l); wl.addWidget(tl); return w
         qr_layout.addWidget(make_qr("qr1.jpg", "打赏", "💰")); qr_layout.addWidget(make_qr("qr2.jpg", "加好友", "👋"))
         
-        text_layout.addWidget(txt)
-        text_layout.addWidget(qr_card)
-        layout.addLayout(text_layout)
+        content_layout.addWidget(qr_card)
+        layout.addWidget(content)
 
 class HandScrollArea(QScrollArea):
     def __init__(self, parent_widget):
@@ -1692,8 +1855,21 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(main); layout.setContentsMargins(15,15,15,15); layout.setSpacing(15)
 
         # LEFT
-        left = QWidget(); left.setFixedWidth(280); lv = QVBoxLayout(left); lv.setContentsMargins(0,0,0,0)
+        left = QWidget(); left.setFixedWidth(280); lv = QVBoxLayout(left); lv.setContentsMargins(0,0,0,0); lv.setSpacing(12)
+        
+        # 拖放区域容器
+        drop_container = QVBoxLayout(); drop_container.setSpacing(8)
         self.drag = DragArea(); self.drag.dropped.connect(self.add_files)
+        drop_hint = QLabel("拖放文件或点击上传"); drop_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        drop_hint.setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 500;")
+        drop_container.addWidget(self.drag); drop_container.addWidget(drop_hint)
+        lv.addLayout(drop_container)
+        
+        # 发票清单标题
+        list_title = QLabel("📋 发票清单 (双击修正金额)")
+        list_title.setStyleSheet("color: #64748B; font-size: 12px; font-weight: 600; margin-top: 8px;")
+        lv.addWidget(list_title)
+        
         self.list = QListWidget(); self.list.setIconSize(QSize(40,50)); self.list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu); self.list.customContextMenuRequested.connect(self.ctx_menu)
         self.list.itemDoubleClicked.connect(self.edit_item); self.list.itemClicked.connect(self.show_single_doc)
@@ -1701,47 +1877,56 @@ class MainWindow(QMainWindow):
         tb = QHBoxLayout(); tb.setSpacing(10)
         self.btn_set = QPushButton("设置")
         self.btn_set.setMinimumHeight(44)
-        self.btn_set.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #3B82F6, stop:1 #2563EB);
+        # 平台自适应按钮样式
+        if UI_CONFIG.get("use_gradients", True):
+            btn_bg = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 #2563EB);"
+            btn_hover = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2563EB, stop:1 #1D4ED8);"
+        else:
+            btn_bg = "background: #2563EB;"
+            btn_hover = "background: #1D4ED8;"
+        self.btn_set.setStyleSheet(f"""
+            QPushButton {{
+                {btn_bg}
                 border: none;
                 color: white;
                 font-weight: 600;
                 font-size: 14px;
                 border-radius: 8px;
                 padding: 10px 20px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #2563EB, stop:1 #1D4ED8);
-            }
+            }}
+            QPushButton:hover {{
+                {btn_hover}
+            }}
         """)
         self.btn_set.clicked.connect(lambda: SettingsDlg(self).exec())
         
         self.btn_del = QPushButton("清空")
         self.btn_del.setMinimumHeight(44)
-        self.btn_del.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #60A5FA, stop:1 #3B82F6);
+        if UI_CONFIG.get("use_gradients", True):
+            del_bg = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60A5FA, stop:1 #3B82F6);"
+            del_hover = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 #2563EB);"
+        else:
+            del_bg = "background: #3B82F6;"
+            del_hover = "background: #2563EB;"
+        self.btn_del.setStyleSheet(f"""
+            QPushButton {{
+                {del_bg}
                 border: none;
                 color: white;
                 font-weight: 600;
                 font-size: 14px;
                 border-radius: 8px;
                 padding: 10px 20px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #3B82F6, stop:1 #2563EB);
-            }
+            }}
+            QPushButton:hover {{
+                {del_hover}
+            }}
         """)
         self.btn_del.clicked.connect(self.clear)
         
         tb.addWidget(self.btn_set); tb.addStretch(); tb.addWidget(self.btn_del)
         
-        lv.addWidget(self.drag); lv.addWidget(QLabel("发票清单 (双击修正):", objectName="Title")); lv.addWidget(self.list); lv.addLayout(tb)
+        lv.addWidget(self.list); lv.addLayout(tb)
         footer_lbl = QLabel(APP_AUTHOR_CN, alignment=Qt.AlignmentFlag.AlignCenter); footer_lbl.setStyleSheet("color:#999; font-size:11px; margin-top: 10px;")
         lv.addWidget(footer_lbl)
 
@@ -1759,7 +1944,11 @@ class MainWindow(QMainWindow):
         self.settings_card = Card() 
         self.settings_layout = QVBoxLayout(self.settings_card)
         self.settings_layout.setSpacing(15); self.settings_layout.setContentsMargins(20,20,20,20)
-        self.settings_layout.addWidget(QLabel("打印设置", objectName="Title"))
+        
+        # 打印设置标题
+        print_title = QLabel("🖨️ 打印设置")
+        print_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #1E293B; margin-bottom: 5px;")
+        self.settings_layout.addWidget(print_title)
         
         r_pr = QHBoxLayout(); self.cb_pr = QComboBox(); self.cb_pr.addItem("🖥️ 默认打印机/PDF")
         if platform.system() in ["Windows", "Linux"]: 
@@ -1777,9 +1966,9 @@ class MainWindow(QMainWindow):
         
         self.settings_layout.addWidget(QLabel("排版模式:"))
         rm = QHBoxLayout(); 
-        self.b1 = QToolButton(); self.b1.setObjectName("LayoutCard"); self.b1.setFixedSize(75, 75); self.b1.setIconSize(QSize(64,64))
-        self.b2 = QToolButton(); self.b2.setObjectName("LayoutCard"); self.b2.setFixedSize(75, 75); self.b2.setIconSize(QSize(64,64))
-        self.b4 = QToolButton(); self.b4.setObjectName("LayoutCard"); self.b4.setFixedSize(75, 75); self.b4.setIconSize(QSize(64,64))
+        self.b1 = QToolButton(); self.b1.setObjectName("LayoutCard"); self.b1.setFixedSize(85, 85); self.b1.setIconSize(QSize(72,72))
+        self.b2 = QToolButton(); self.b2.setObjectName("LayoutCard"); self.b2.setFixedSize(85, 85); self.b2.setIconSize(QSize(72,72))
+        self.b4 = QToolButton(); self.b4.setObjectName("LayoutCard"); self.b4.setFixedSize(85, 85); self.b4.setIconSize(QSize(72,72))
         self.b1.setCheckable(True); self.b2.setCheckable(True); self.b4.setCheckable(True)
         grp=QButtonGroup(self); grp.addButton(self.b1); grp.addButton(self.b2); grp.addButton(self.b4); self.b1.setChecked(True)
         grp.buttonClicked.connect(self.show_layout_preview)
@@ -1983,16 +2172,39 @@ class MainWindow(QMainWindow):
         s.setValue("last_excel_path", p)
         
         try:
-            # 准备新数据
+            # 准备新数据 - 18个专业字段
             new_rows = []
-            for x in self.data:
+            from datetime import datetime
+            import_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+            
+            for idx, x in enumerate(self.data, 1):
                 ext = x.get("ext", {})
+                # 处理金额字段,确保是数值类型
+                try: amount = float(x.get("a", 0) or 0)
+                except: amount = 0
+                try: amount_without_tax = float(ext.get("amount_without_tax", "") or 0)
+                except: amount_without_tax = ""
+                try: tax_amt = float(ext.get("tax_amt", "") or 0)
+                except: tax_amt = ""
+                
                 new_rows.append({
+                    "序号": idx,
                     "开票日期": x.get("d", ""), 
+                    "发票类型": ext.get("invoice_type", ""),
                     "发票代码": ext.get("code", ""), 
                     "发票号码": ext.get("number", ""), 
+                    "校验码": ext.get("check_code", "")[-6:] if ext.get("check_code") else "",  # 后6位
+                    "购买方名称": ext.get("buyer", ""),
+                    "购买方税号": ext.get("buyer_tax_id", ""),
                     "销售方名称": ext.get("seller", ""), 
-                    "价税合计": x.get("a", 0), 
+                    "销售方税号": ext.get("seller_tax_id", ""),
+                    "不含税金额": amount_without_tax,
+                    "税率": ext.get("tax_rate", ""),
+                    "税额": tax_amt,
+                    "价税合计": amount,
+                    "商品明细": ext.get("item_name", ""),
+                    "备注": ext.get("remark", ""),
+                    "导入时间": import_time,
                     "文件路径": x.get("p", "")
                 })
             
@@ -2014,32 +2226,110 @@ class MainWindow(QMainWindow):
             # 保存到 Excel
             combined_df.to_excel(p, index=False, engine='openpyxl')
             
-            # 使用 openpyxl 添加颜色标记
+            # 使用 openpyxl 添加专业样式
             try:
                 from openpyxl import load_workbook
-                from openpyxl.styles import PatternFill
+                from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+                from openpyxl.utils import get_column_letter
                 
                 wb = load_workbook(p)
                 ws = wb.active
                 
-                # 检测重复的发票号码（第3列，索引为C）
+                # 定义样式
+                header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+                header_font = Font(color="FFFFFF", bold=True, size=11)
+                header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+                thin_border = Border(
+                    left=Side(style='thin', color='E2E8F0'),
+                    right=Side(style='thin', color='E2E8F0'),
+                    top=Side(style='thin', color='E2E8F0'),
+                    bottom=Side(style='thin', color='E2E8F0')
+                )
+                
+                # 应用表头样式
+                for col_idx in range(1, ws.max_column + 1):
+                    cell = ws.cell(row=1, column=col_idx)
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = header_align
+                    cell.border = thin_border
+                
+                # 冻结首行
+                ws.freeze_panes = "A2"
+                
+                # 设置列宽
+                column_widths = [6, 12, 14, 14, 12, 10, 25, 22, 25, 22, 12, 8, 12, 14, 30, 20, 18, 40]
+                for idx, width in enumerate(column_widths, 1):
+                    if idx <= ws.max_column:
+                        ws.column_dimensions[get_column_letter(idx)].width = width
+                
+                # 检测重复的发票号码（现在是第5列）
                 invoice_numbers = {}
                 duplicate_rows = set()
+                INVOICE_NUM_COL = 5  # 发票号码列
                 
-                for row_idx in range(2, ws.max_row + 1):  # 从第2行开始（跳过表头）
-                    invoice_num = ws.cell(row=row_idx, column=3).value  # 发票号码列
-                    if invoice_num and str(invoice_num).strip():  # 非空
+                for row_idx in range(2, ws.max_row + 1):
+                    invoice_num = ws.cell(row=row_idx, column=INVOICE_NUM_COL).value
+                    if invoice_num and str(invoice_num).strip():
                         if invoice_num in invoice_numbers:
                             duplicate_rows.add(row_idx)
                             duplicate_rows.add(invoice_numbers[invoice_num])
                         else:
                             invoice_numbers[invoice_num] = row_idx
                 
-                # 为重复行添加黄色背景
-                yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-                for row_idx in duplicate_rows:
+                # 应用数据行样式(斑马纹 + 重复标记)
+                for row_idx in range(2, ws.max_row + 1):
+                    is_duplicate = row_idx in duplicate_rows
+                    is_zebra = row_idx % 2 == 0
                     for col_idx in range(1, ws.max_column + 1):
-                        ws.cell(row=row_idx, column=col_idx).fill = yellow_fill
+                        cell = ws.cell(row=row_idx, column=col_idx)
+                        cell.border = thin_border
+                        if is_duplicate:
+                            cell.fill = yellow_fill
+                        elif is_zebra:
+                            cell.fill = zebra_fill
+                        # 金额列右对齐
+                        if col_idx in [11, 13, 14]:  # 不含税金额、税额、价税合计
+                            cell.alignment = Alignment(horizontal="right")
+                
+                # 添加底部统计行
+                stat_row = ws.max_row + 2
+                ws.cell(row=stat_row, column=1, value="统计").font = Font(bold=True)
+                ws.cell(row=stat_row, column=2, value=f"共 {ws.max_row - 1} 张发票")
+                
+                # 计算总金额
+                total_amount = 0
+                for row_idx in range(2, ws.max_row):
+                    try:
+                        val = ws.cell(row=row_idx, column=14).value  # 价税合计列
+                        if val: total_amount += float(val)
+                    except: pass
+                ws.cell(row=stat_row, column=14, value=f"¥{total_amount:,.2f}").font = Font(bold=True, color="DC2626")
+                
+                # 添加工作表保护(安全锁定功能)
+                # 允许: 选择单元格、复制、排序、筛选、查找
+                # 禁止: 编辑内容、删除行列、修改格式、插入行列
+                SHEET_PASSWORD = "InvoiceMaster2024"  # 保护密码
+                ws.protection.sheet = True
+                ws.protection.password = SHEET_PASSWORD
+                ws.protection.enable()
+                # 允许的操作
+                ws.protection.selectLockedCells = True  # 允许选择锁定单元格
+                ws.protection.selectUnlockedCells = True  # 允许选择未锁定单元格
+                ws.protection.sort = True  # 允许排序
+                ws.protection.autoFilter = True  # 允许筛选
+                # 禁止的操作(默认都是False,即禁止)
+                ws.protection.formatCells = False  # 禁止格式化单元格
+                ws.protection.formatColumns = False  # 禁止格式化列
+                ws.protection.formatRows = False  # 禁止格式化行
+                ws.protection.insertColumns = False  # 禁止插入列
+                ws.protection.insertRows = False  # 禁止插入行
+                ws.protection.insertHyperlinks = False  # 禁止插入超链接
+                ws.protection.deleteColumns = False  # 禁止删除列
+                ws.protection.deleteRows = False  # 禁止删除行
+                logger.info("Excel 工作表保护已启用")
                 
                 wb.save(p)
                 
@@ -2051,11 +2341,15 @@ class MainWindow(QMainWindow):
                     msg = f"✅ 已导出 {len(new_df)} 条数据！\n"
                     logger.info(f"Excel 导出成功: {p}, 共 {len(new_df)} 条")
                 
+                msg += f"💰 价税合计: ¥{total_amount:,.2f}\n"
+                
                 if duplicate_rows:
-                    msg += f"⚠️ 检测到 {len(duplicate_rows)} 条重复发票（已用黄色标记）"
+                    msg += f"⚠️ 检测到 {len(duplicate_rows)//2} 组重复发票（已用黄色标记）\n"
                     logger.warning(f"检测到 {len(duplicate_rows)} 条重复发票")
                 else:
-                    msg += "✓ 未检测到重复发票"
+                    msg += "✓ 未检测到重复发票\n"
+                
+                msg += "🔒 工作表已保护，仅允许查看和复制"
                 
                 # 导出成功后，扣除试用次数（如果未激活）
                 info = self.license_manager.get_activation_info()
