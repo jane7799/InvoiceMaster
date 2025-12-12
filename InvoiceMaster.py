@@ -12,22 +12,17 @@ import gc
 import warnings
 import logging
 from logging.handlers import RotatingFileHandler
+from license_manager import LicenseManager
 
 # 屏蔽 SSL 警告
 warnings.filterwarnings("ignore", category=UserWarning, module='urllib3')
 
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QPushButton, QLabel, QFileDialog, 
-                             QListWidget, QListWidgetItem, QMessageBox, QSplitter,
-                             QComboBox, QSpinBox, QGroupBox, QSplashScreen, 
-                             QDialog, QLineEdit, QFormLayout, QFrame, QCheckBox,
-                             QRadioButton, QButtonGroup, QAbstractItemView, 
-                             QGraphicsDropShadowEffect, QSizePolicy, QMenu, 
-                             QScrollArea, QStackedWidget, QInputDialog, QProgressBar,
-                             QToolButton)
-from PyQt6.QtCore import Qt, QSettings, QSize, QMimeData, pyqtSignal, QByteArray, QRectF, QPointF, QTimer, QEvent
-from PyQt6.QtGui import QPixmap, QIcon, QDragEnterEvent, QDropEvent, QImage, QColor, QPainter, QPalette, QPen, QFont, QAction, QCursor, QPageLayout, QTransform
-from PyQt6.QtPrintSupport import QPrinterInfo, QPageSetupDialog, QPrinter, QPrintDialog
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
+    QListWidget, QListWidgetItem, QMessageBox, QDialog, QLineEdit, QComboBox, QSpinBox, QCheckBox, QRadioButton, QButtonGroup,
+    QProgressBar, QFrame, QScrollArea, QToolButton, QAbstractItemView, QGraphicsDropShadowEffect, QSizePolicy, QStackedWidget, QInputDialog)
+from PyQt6.QtCore import Qt, QTimer, QSettings, QSize, QRect, QPointF, QPoint, QPropertyAnimation, QEasingCurve, pyqtSignal, QByteArray
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QFont, QIcon, QDragEnterEvent, QDropEvent, QPalette, QBrush, QTransform, QPageLayout
+from PyQt6.QtPrintSupport import QPrinter, QPrintDialog, QPrinterInfo
 
 # ==========================================
 # 全局配置
@@ -124,93 +119,312 @@ class Icons:
         return QIcon(QPixmap.fromImage(QImage.fromData(QByteArray(Icons._SVGS.get(name,"").format(c=color).encode()))))
 
 # ==========================================
-# 1. 样式表 (ThemeManager)
+# 1. 现代化主题系统
 # ==========================================
 class ThemeManager:
     SCROLLBAR_CSS = """
-        QScrollBar:vertical { border: none; background: #f0f2f5; width: 12px; margin: 0px; }
-        QScrollBar::handle:vertical { background: #c0c4cc; min-height: 20px; border-radius: 6px; margin: 2px; }
-        QScrollBar::handle:vertical:hover { background: #a0a4ac; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
-        QScrollBar:horizontal { border: none; background: #f0f2f5; height: 12px; margin: 0px; }
-        QScrollBar::handle:horizontal { background: #c0c4cc; min-width: 20px; border-radius: 6px; margin: 2px; }
-        QScrollBar::handle:horizontal:hover { background: #a0a4ac; }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
+        QScrollBar:vertical {
+            border: none;
+            background: transparent;
+            width: 10px;
+            margin: 0px;
+        }
+        QScrollBar::handle:vertical {
+            background: rgba(0, 0, 0, 0.2);
+            min-height: 30px;
+            border-radius: 5px;
+            margin: 2px;
+        }
+        QScrollBar::handle:vertical:hover {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+        QScrollBar:horizontal {
+            border: none;
+            background: transparent;
+            height: 10px;
+            margin: 0px;
+        }
+        QScrollBar::handle:horizontal {
+            background: rgba(0, 0, 0, 0.2);
+            min-width: 30px;
+            border-radius: 5px;
+            margin: 2px;
+        }
+        QScrollBar::handle:horizontal:hover {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            width: 0px;
+        }
     """
     
     COMMON_CSS = """
-        QRadioButton { color: #333; font-weight: 500; font-size: 13px; spacing: 8px; }
-        QCheckBox { color: #333; font-weight: 500; font-size: 13px; spacing: 8px; }
-        QWidget#ItemRow { background: transparent; }
-        QLabel#ItemTitle { font-weight: bold; font-size: 13px; color: #333; }
-        QLabel#ItemDetail { color: #666; font-size: 11px; }
-        QPushButton#RowDelBtn { background: transparent; border: none; border-radius: 4px; }
-        QPushButton#RowDelBtn:hover { background-color: #ffebee; }
+        QRadioButton {
+            color: #475569;
+            font-weight: 500;
+            font-size: 13px;
+            spacing: 8px;
+        }
+        QCheckBox {
+            color: #475569;
+            font-weight: 500;
+            font-size: 13px;
+            spacing: 8px;
+        }
+        QWidget#ItemRow {
+            background: transparent;
+        }
+        QLabel#ItemTitle {
+            font-weight: 600;
+            font-size: 13px;
+            color: #1E293B;
+        }
+        QLabel#ItemDetail {
+            color: #64748B;
+            font-size: 12px;
+        }
+        QPushButton#RowDelBtn {
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+        }
+        QPushButton#RowDelBtn:hover {
+            background-color: #FEE2E2;
+        }
         
-        QToolButton#LayoutCard { 
-            background-color: white; 
-            border: 2px solid #e1e4e8; 
-            border-radius: 8px; 
+        QToolButton#LayoutCard {
+            background-color: white;
+            border: 2px solid #E2E8F0;
+            border-radius: 8px;
             padding: 2px;
         }
-        QToolButton#LayoutCard:hover { 
-            border-color: #8dbbf5; 
-            background-color: #f0f9ff; 
+        QToolButton#LayoutCard:hover {
+            border-color: #2563EB;
+            background-color: #EFF6FF;
         }
-        QToolButton#LayoutCard:checked { 
-            border: 3px solid #007AFF; 
-            background-color: #e6f2ff; 
+        QToolButton#LayoutCard:checked {
+            border: 3px solid #2563EB;
+            background-color: #DBEAFE;
         }
-        QFrame#PreviewControlBar { background-color: white; border-top: 1px solid #e1e4e8; }
-        QLabel#PageLabel { font-size: 12px; color: #666; }
+        QFrame#PreviewControlBar {
+            background-color: white;
+            border-top: 1px solid #E2E8F0;
+        }
+        QLabel#PageLabel {
+            font-size: 12px;
+            color: #64748B;
+        }
+        QLabel#Title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1E293B;
+        }
     """
 
     CSS_LIGHT = """
-    QMainWindow { background-color: #f0f2f5; }
-    QWidget { color: #333; font-family: "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif; font-size: 13px; }
-    QFrame#Card { background-color: white; border: 1px solid #e1e4e8; border-radius: 12px; }
-    QPushButton { background-color: white; border: 1px solid #d1d5da; border-radius: 6px; padding: 6px 12px; }
-    QPushButton:hover { background-color: #f6f8fa; border-color: #0366d6; color: #0366d6; }
-    QPushButton:pressed { background-color: #e1f0fa; }
-    QPushButton#IconBtn { background: transparent; border: none; border-radius: 4px; padding: 4px; }
-    QPushButton#IconBtn:hover { background-color: #f0f0f0; }
-    QPushButton#PrimaryBtn { background-color: #007AFF; border: none; color: white; font-weight: bold; font-size: 14px; border-radius: 8px; }
-    QPushButton#PrimaryBtn:hover { background-color: #0062cc; }
-    QPushButton#DangerBtn { color: #d73a49; }
-    QPushButton#PropBtn { color: #333; border: 1px solid #d1d5da; }
-    QListWidget { background-color: white; border: 1px solid #e1e4e8; border-radius: 8px; outline: none; }
-    QListWidget::item { border-bottom: 1px solid #f5f5f5; }
-    QListWidget::item:selected { background-color: #f0f9ff; border-left: 4px solid #007AFF; }
-    QLineEdit, QComboBox, QSpinBox { border: 1px solid #d1d5da; border-radius: 4px; padding: 5px; background: white; min-height: 24px; }
-    QGroupBox { border: none; font-weight: bold; margin-top: 10px; }
+    QMainWindow {
+        background-color: #F8FAFC;
+    }
+    QWidget {
+        color: #1E293B;
+        font-family: "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+        font-size: 13px;
+    }
+    QFrame#Card {
+        background-color: white;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+    }
+    QPushButton {
+        background-color: white;
+        border: 1.5px solid #CBD5E1;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-weight: 500;
+        color: #475569;
+    }
+    QPushButton:hover {
+        background-color: #F8FAFC;
+        border-color: #2563EB;
+        color: #2563EB;
+    }
+    QPushButton:pressed {
+        background-color: #EFF6FF;
+    }
+    QPushButton#IconBtn {
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        padding: 6px;
+    }
+    QPushButton#IconBtn:hover {
+        background-color: #F1F5F9;
+    }
+    QPushButton#PrimaryBtn {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 #3B82F6, stop:1 #2563EB);
+        border: none;
+        color: white;
+        font-weight: 600;
+        font-size: 14px;
+        border-radius: 8px;
+        padding: 10px 20px;
+    }
+    QPushButton#PrimaryBtn:hover {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 #2563EB, stop:1 #1D4ED8);
+    }
+    QPushButton#DangerBtn {
+        color: #DC2626;
+    }
+    QPushButton#PropBtn {
+        color: #475569;
+        border: 1.5px solid #CBD5E1;
+    }
+    QListWidget {
+        background-color: white;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        outline: none;
+        padding: 4px;
+    }
+    QListWidget::item {
+        border-bottom: 1px solid #F1F5F9;
+        border-radius: 4px;
+        margin: 2px 0px;
+    }
+    QListWidget::item:selected {
+        background-color: #EFF6FF;
+        border-left: 3px solid #2563EB;
+        color: #1E293B;
+    }
+    QListWidget::item:hover {
+        background-color: #F8FAFC;
+    }
+    QLineEdit, QComboBox, QSpinBox {
+        border: 1.5px solid #CBD5E1;
+        border-radius: 6px;
+        padding: 8px 12px;
+        background: white;
+        min-height: 20px;
+        font-size: 13px;
+    }
+    QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
+        border-color: #2563EB;
+        background: white;
+    }
+    QGroupBox {
+        border: none;
+        font-weight: 600;
+        margin-top: 12px;
+        color: #1E293B;
+    }
     """ + SCROLLBAR_CSS + COMMON_CSS
     
     CSS_DARK = """
-    QMainWindow { background-color: #1e1e1e; }
-    QWidget { color: #ccc; font-family: "Microsoft YaHei UI", sans-serif; font-size: 13px; }
-    QFrame#Card { background-color: #252526; border: 1px solid #333; border-radius: 12px; }
-    QPushButton { background-color: #333; border: 1px solid #444; border-radius: 6px; padding: 6px; color: #ccc; }
-    QPushButton:hover { background-color: #3e3e3e; border-color: #007AFF; color: white; }
-    QPushButton#LayoutBtn { background-color: #2d2d2d; border: 1px solid #444; }
-    QPushButton#LayoutBtn:checked { background-color: #004080; border: 2px solid #007AFF; }
-    QPushButton#IconBtn { background: transparent; border: none; border-radius: 4px; }
-    QPushButton#IconBtn:hover { background-color: #3e3e3e; }
-    QPushButton#PrimaryBtn { background-color: #007AFF; border: none; color: white; font-weight: bold; }
-    QPushButton#DangerBtn { color: #ff7b72; }
-    QListWidget { background-color: #1e1e1e; border: 1px solid #333; border-radius: 8px; outline: none; }
-    QListWidget::item:selected { background-color: #004080; border-left: 4px solid #007AFF; color: white; }
-    QLineEdit, QComboBox, QSpinBox { border: 1px solid #444; border-radius: 4px; padding: 5px; background: #252526; color: white; }
-    QRadioButton { color: #eee; } QCheckBox { color: #eee; }
-    QLabel#ItemTitle { color: #eee; } QLabel#ItemDetail { color: #aaa; }
-    QToolButton#LayoutCard { background-color: #2d2d2d; border: 2px solid #444; }
-    QToolButton#LayoutCard:checked { border-color: #007AFF; background-color: #004080; }
-    QFrame#AboutCard { background-color: #2d2d30; border: 1px solid #444; }
-    QFrame#AboutCard QLabel { color: #aaa; }
+    QMainWindow {
+        background-color: #0F172A;
+    }
+    QWidget {
+        color: #E2E8F0;
+        font-family: "Microsoft YaHei UI", sans-serif;
+        font-size: 13px;
+    }
+    QFrame#Card {
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        border-radius: 12px;
+    }
+    QPushButton {
+        background-color: #1E293B;
+        border: 1.5px solid #475569;
+        border-radius: 6px;
+        padding: 8px 16px;
+        color: #E2E8F0;
+        font-weight: 500;
+    }
+    QPushButton:hover {
+        background-color: #334155;
+        border-color: #3B82F6;
+        color: white;
+    }
+    QPushButton#IconBtn {
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+    }
+    QPushButton#IconBtn:hover {
+        background-color: #334155;
+    }
+    QPushButton#PrimaryBtn {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 #3B82F6, stop:1 #2563EB);
+        border: none;
+        color: white;
+        font-weight: 600;
+    }
+    QPushButton#DangerBtn {
+        color: #EF4444;
+    }
+    QListWidget {
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        outline: none;
+        padding: 4px;
+    }
+    QListWidget::item {
+        border-bottom: 1px solid #334155;
+        border-radius: 4px;
+        margin: 2px 0px;
+    }
+    QListWidget::item:selected {
+        background-color: #1E40AF;
+        border-left: 3px solid #3B82F6;
+        color: white;
+    }
+    QListWidget::item:hover {
+        background-color: #334155;
+    }
+    QLineEdit, QComboBox, QSpinBox {
+        border: 1.5px solid #475569;
+        border-radius: 6px;
+        padding: 8px 12px;
+        background: #1E293B;
+        color: white;
+    }
+    QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
+        border-color: #3B82F6;
+    }
+    QRadioButton {
+        color: #E2E8F0;
+    }
+    QCheckBox {
+        color: #E2E8F0;
+    }
+    QLabel#ItemTitle {
+        color: #F1F5F9;
+    }
+    QLabel#ItemDetail {
+        color: #94A3B8;
+    }
+    QToolButton#LayoutCard {
+        background-color: #1E293B;
+        border: 2px solid #475569;
+    }
+    QToolButton#LayoutCard:checked {
+        border-color: #3B82F6;
+        background-color: #1E40AF;
+    }
     """ + SCROLLBAR_CSS
 
     @staticmethod
     def apply(app, mode="Light"):
-        if mode == "Auto": mode = "Light" 
+        if mode == "Auto":
+            mode = "Light"
         if mode == "Dark":
             app.setStyleSheet(ThemeManager.CSS_DARK)
             return "#ffffff"
@@ -290,14 +504,24 @@ class PDFEngine:
                 chunk = files[i:i+chunk_size]; pg = doc.new_page(width=PW, height=PH)
                 for j, f in enumerate(chunk):
                     if j >= len(cells): break
-                    try: 
-                        with fitz.open(f) as src_doc:
-                            cx, cy, cw, ch = cells[j]
-                            # [核心] 如果用户选了横向(H)，内容需要逆时针转90度 (-90)
-                            rotate_angle = -90 if orient == "H" else 0
-                            target_rect = fitz.Rect(cx + PADDING, cy + PADDING, cx + cw - PADDING, cy + ch - PADDING)
-                            pg.show_pdf_page(target_rect, src_doc, 0, keep_proportion=True, rotate=rotate_angle)
-                    except: pass
+                    try:
+                        cx, cy, cw, ch = cells[j]
+                        rotate_angle = -90 if orient == "H" else 0
+                        target_rect = fitz.Rect(cx + PADDING, cy + PADDING, cx + cw - PADDING, cy + ch - PADDING)
+                        
+                        # 检查文件类型
+                        if f.lower().endswith(('.jpg', '.jpeg', '.png')):
+                            # 图片文件:直接插入图片
+                            pg.insert_image(target_rect, filename=f, keep_proportion=True, rotate=rotate_angle)
+                        else:
+                            # PDF文件:使用 show_pdf_page
+                            with fitz.open(f) as src_doc:
+                                pg.show_pdf_page(target_rect, src_doc, 0, keep_proportion=True, rotate=rotate_angle)
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"处理文件失败 {os.path.basename(f)}: {str(e)}")
+                        pass
                 if cutline:
                     s = pg.new_shape(); s.draw_rect(fitz.Rect(0,0,0,0)) 
                     if mode == "1x2":
@@ -305,7 +529,7 @@ class PDFEngine:
                     elif mode == "2x2":
                         s.draw_line(fitz.Point(PW/2, 0), fitz.Point(PW/2, PH)) 
                         s.draw_line(fitz.Point(0, PH/2), fitz.Point(PW, PH/2)) 
-                    s.finish(color=(0,0,0), width=1.2, dashes=[4,4], stroke_opacity=1.0); s.commit(overlay=True)
+                    s.finish(color=(0,0,0), width=0.5, dashes=[4,4], stroke_opacity=0.6); s.commit(overlay=True)
             if out_path: doc.save(out_path)
             return doc if not out_path else None
         finally:
@@ -381,60 +605,843 @@ class DragArea(QLabel):
 class InvoiceItemWidget(QWidget):
     def __init__(self, data, parent_item, delete_callback):
         super().__init__()
-        self.data = data; self.parent_item = parent_item; self.delete_callback = delete_callback
+        self.data = data
+        self.parent_item = parent_item
+        self.delete_callback = delete_callback
         self.setObjectName("ItemRow")
-        layout = QHBoxLayout(self); layout.setContentsMargins(5, 8, 5, 8); layout.setSpacing(10)
-        self.icon_lbl = QLabel(); self.icon_lbl.setPixmap(Icons.get("file", "#888").pixmap(32,32))
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 8, 5, 8)
+        layout.setSpacing(10)
+        
+        self.icon_lbl = QLabel()
+        self.icon_lbl.setPixmap(Icons.get("file", "#888").pixmap(32, 32))
         layout.addWidget(self.icon_lbl)
-        text_layout = QVBoxLayout(); text_layout.setSpacing(2)
-        self.lbl_title = QLabel(data['n']); self.lbl_title.setObjectName("ItemTitle")
-        self.lbl_detail = QLabel(f"{data['d']} | ¥{data['a']:.2f}"); self.lbl_detail.setObjectName("ItemDetail")
-        text_layout.addWidget(self.lbl_title); text_layout.addWidget(self.lbl_detail)
-        layout.addLayout(text_layout); layout.addStretch()
-        self.btn_del = QPushButton(); self.btn_del.setObjectName("RowDelBtn")
-        self.btn_del.setIcon(Icons.get("trash", "#d73a49")); self.btn_del.setFixedSize(28, 28)
-        self.btn_del.setToolTip("删除此发票"); self.btn_del.clicked.connect(self.on_delete_clicked)
+        
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(2)
+        
+        # 标题行（包含文件名和状态标识）
+        title_row = QHBoxLayout()
+        title_row.setSpacing(6)
+        
+        self.lbl_title = QLabel(data['n'])
+        self.lbl_title.setObjectName("ItemTitle")
+        title_row.addWidget(self.lbl_title)
+        
+        # 状态标识
+        self.status_badge = QLabel()
+        self.status_badge.setFixedSize(18, 18)
+        self.status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_badge.hide()
+        title_row.addWidget(self.status_badge)
+        title_row.addStretch()
+        
+        text_layout.addLayout(title_row)
+        
+        self.lbl_detail = QLabel(f"{data['d']} | ¥{data['a']:.2f}")
+        self.lbl_detail.setObjectName("ItemDetail")
+        text_layout.addWidget(self.lbl_detail)
+        
+        layout.addLayout(text_layout)
+        layout.addStretch()
+        
+        self.btn_del = QPushButton()
+        self.btn_del.setObjectName("RowDelBtn")
+        self.btn_del.setIcon(Icons.get("trash", "#d73a49"))
+        self.btn_del.setFixedSize(28, 28)
+        self.btn_del.setToolTip("删除此发票")
+        self.btn_del.clicked.connect(self.on_delete_clicked)
         layout.addWidget(self.btn_del)
-    def on_delete_clicked(self): self.delete_callback(self.parent_item)
+        
+        self.update_status_badge()
+    
+    def on_delete_clicked(self):
+        self.delete_callback(self.parent_item)
+    
     def update_display(self, new_data):
-        self.data = new_data; self.lbl_title.setText(new_data['n']); self.lbl_detail.setText(f"{new_data['d']} | ¥{new_data['a']:.2f}")
+        self.data = new_data
+        self.lbl_title.setText(new_data['n'])
+        self.lbl_detail.setText(f"{new_data['d']} | ¥{new_data['a']:.2f}")
+        self.update_status_badge()
+    
+    def update_status_badge(self):
+        """更新状态标识"""
+        has_amount = self.data.get('a', 0) > 0
+        is_manually_edited = self.data.get('manually_edited', False)
+        
+        if not has_amount:
+            self.status_badge.setText("⚠️")
+            self.status_badge.setStyleSheet("background: #FEE2E2; border-radius: 9px; font-size: 12px;")
+            self.status_badge.setToolTip("未识别到金额，请手动修改")
+            self.status_badge.show()
+            self.setStyleSheet("")
+        elif is_manually_edited:
+            self.status_badge.setText("✓")
+            self.status_badge.setStyleSheet("background: #D1FAE5; border-radius: 9px; font-size: 12px; color: #059669; font-weight: bold;")
+            self.status_badge.setToolTip("已手动修改金额")
+            self.status_badge.show()
+            self.setStyleSheet("QWidget#ItemRow { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(209, 250, 229, 0.3), stop:1 rgba(209, 250, 229, 0.1)); border-left: 3px solid #10B981; }")
+        else:
+            self.status_badge.hide()
+            self.setStyleSheet("")
 
 class SettingsDlg(QDialog):
     def __init__(self, parent):
-        super().__init__(parent); self.setWindowTitle("设置"); self.resize(400, 150); lay = QFormLayout(self)
+        super().__init__(parent)
+        self.setWindowTitle("设置")
+        self.resize(550, 420)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #F8FAFC;
+            }
+        """)
+        self.parent = parent
         s = QSettings("MySoft", "InvoiceMaster")
-        self.cb_th = QComboBox(); self.cb_th.addItems(["Light", "Dark"]); self.cb_th.setCurrentText(s.value("theme", "Light"))
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # 渐变标题栏
+        header = QWidget()
+        header.setFixedHeight(90)
+        header.setStyleSheet("""
+            background: qlineargradient(
+                x1:0, y1:0, x2:1, y2:0,
+                stop:0 #2563EB,
+                stop:1 #7C3AED
+            );
+        """)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(30, 20, 30, 20)
+        header_layout.setSpacing(5)
+        
+        title = QLabel("⚙️ 应用设置")
+        title.setStyleSheet("""
+            font-size: 22px;
+            font-weight: 700;
+            color: white;
+            background: transparent;
+        """)
+        header_layout.addWidget(title)
+        
+        subtitle = QLabel("配置主题、API密钥和授权信息")
+        subtitle.setStyleSheet("""
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.9);
+            background: transparent;
+        """)
+        header_layout.addWidget(subtitle)
+        
+        layout.addWidget(header)
+        
+        # 内容区域
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(30, 30, 30, 30)
+        content_layout.setSpacing(20)
+        
+        # 激活状态卡片
+        if hasattr(parent, 'license_manager'):
+            activation_card = QFrame()
+            activation_card.setStyleSheet("""
+                QFrame {
+                    background-color: white;
+                    border-radius: 12px;
+                }
+            """)
+            
+            activation_shadow = QGraphicsDropShadowEffect()
+            activation_shadow.setBlurRadius(20)
+            activation_shadow.setColor(QColor(0, 0, 0, 30))
+            activation_shadow.setOffset(0, 2)
+            activation_card.setGraphicsEffect(activation_shadow)
+            
+            activation_layout = QVBoxLayout(activation_card)
+            activation_layout.setContentsMargins(20, 20, 20, 20)
+            activation_layout.setSpacing(15)
+            
+            card_title = QLabel("🔑 Excel 导出授权")
+            card_title.setStyleSheet("""
+                font-size: 15px;
+                font-weight: 600;
+                color: #1E293B;
+            """)
+            activation_layout.addWidget(card_title)
+            
+            info = parent.license_manager.get_activation_info()
+            status_container = QHBoxLayout()
+            
+            if info['is_activated']:
+                activation_status = QLabel("✅ 已激活")
+                activation_status.setStyleSheet("""
+                    color: #10B981;
+                    font-weight: 600;
+                    font-size: 14px;
+                    padding: 8px 16px;
+                    background: #ECFDF5;
+                    border-radius: 6px;
+                """)
+            else:
+                remaining = info['remaining_trials']
+                activation_status = QLabel(f"⚠️ 未激活 (剩余: {remaining}/10次)")
+                activation_status.setStyleSheet("""
+                    color: #F59E0B;
+                    font-weight: 600;
+                    font-size: 14px;
+                    padding: 8px 16px;
+                    background: #FEF3C7;
+                    border-radius: 6px;
+                """)
+            
+            activation_btn = QPushButton("激活管理")
+            activation_btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #3B82F6, stop:1 #2563EB);
+                    border: none;
+                    color: white;
+                    font-weight: 600;
+                    font-size: 13px;
+                    border-radius: 6px;
+                    padding: 8px 20px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #2563EB, stop:1 #1D4ED8);
+                }
+            """)
+            activation_btn.clicked.connect(self.open_activation_dialog)
+            
+            status_container.addWidget(activation_status)
+            status_container.addStretch()
+            status_container.addWidget(activation_btn)
+            
+            activation_layout.addLayout(status_container)
+            content_layout.addWidget(activation_card)
+        
+        # 主题设置卡片
+        theme_card = QFrame()
+        theme_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+            }
+        """)
+        
+        theme_shadow = QGraphicsDropShadowEffect()
+        theme_shadow.setBlurRadius(20)
+        theme_shadow.setColor(QColor(0, 0, 0, 30))
+        theme_shadow.setOffset(0, 2)
+        theme_card.setGraphicsEffect(theme_shadow)
+        
+        theme_layout = QVBoxLayout(theme_card)
+        theme_layout.setContentsMargins(20, 20, 20, 20)
+        theme_layout.setSpacing(15)
+        
+        theme_title = QLabel("🎨 外观主题")
+        theme_title.setStyleSheet("""
+            font-size: 15px;
+            font-weight: 600;
+            color: #1E293B;
+        """)
+        theme_layout.addWidget(theme_title)
+        
+        self.cb_th = QComboBox()
+        self.cb_th.addItems(["Light", "Dark"])
+        self.cb_th.setCurrentText(s.value("theme", "Light"))
+        self.cb_th.setStyleSheet("""
+            QComboBox {
+                padding: 10px 12px;
+                border: 2px solid #CBD5E1;
+                border-radius: 8px;
+                background: white;
+                font-size: 14px;
+            }
+            QComboBox:focus {
+                border-color: #2563EB;
+            }
+        """)
         self.cb_th.currentTextChanged.connect(parent.change_theme)
-        lay.addRow("外观主题:", self.cb_th)
-        link = QLabel('<a href="https://console.bce.baidu.com">点击申请百度OCR Key (免费)</a>'); link.setOpenExternalLinks(True); link.setStyleSheet("color:#007AFF")
-        lay.addRow("", link)
-        self.ak = QLineEdit(s.value("ak","")); self.ak.setPlaceholderText("API Key")
-        self.sk = QLineEdit(s.value("sk","")); self.sk.setEchoMode(QLineEdit.EchoMode.Password); self.sk.setPlaceholderText("Secret Key")
-        lay.addRow("API Key:", self.ak); lay.addRow("Secret Key:", self.sk)
-        btn = QPushButton("保存配置"); btn.setObjectName("PrimaryBtn"); btn.clicked.connect(self.save); lay.addRow("", btn)
+        theme_layout.addWidget(self.cb_th)
+        
+        content_layout.addWidget(theme_card)
+        
+        # API配置卡片
+        api_card = QFrame()
+        api_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+            }
+        """)
+        
+        api_shadow = QGraphicsDropShadowEffect()
+        api_shadow.setBlurRadius(20)
+        api_shadow.setColor(QColor(0, 0, 0, 30))
+        api_shadow.setOffset(0, 2)
+        api_card.setGraphicsEffect(api_shadow)
+        
+        api_layout = QVBoxLayout(api_card)
+        api_layout.setContentsMargins(20, 20, 20, 20)
+        api_layout.setSpacing(15)
+        
+        api_title = QLabel("🔐 百度 OCR API 配置")
+        api_title.setStyleSheet("""
+            font-size: 15px;
+            font-weight: 600;
+            color: #1E293B;
+        """)
+        api_layout.addWidget(api_title)
+        
+        link = QLabel('<a href="https://console.bce.baidu.com">点击申请百度OCR Key (免费)</a>')
+        link.setOpenExternalLinks(True)
+        link.setStyleSheet("color: #2563EB; font-size: 12px;")
+        api_layout.addWidget(link)
+        
+        self.ak = QLineEdit(s.value("ak", ""))
+        self.ak.setPlaceholderText("API Key")
+        self.ak.setStyleSheet("""
+            QLineEdit {
+                padding: 10px 12px;
+                border: 2px solid #CBD5E1;
+                border-radius: 8px;
+                background: white;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border-color: #2563EB;
+            }
+        """)
+        api_layout.addWidget(self.ak)
+        
+        self.sk = QLineEdit(s.value("sk", ""))
+        self.sk.setEchoMode(QLineEdit.EchoMode.Password)
+        self.sk.setPlaceholderText("Secret Key")
+        self.sk.setStyleSheet("""
+            QLineEdit {
+                padding: 10px 12px;
+                border: 2px solid #CBD5E1;
+                border-radius: 8px;
+                background: white;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border-color: #2563EB;
+            }
+        """)
+        api_layout.addWidget(self.sk)
+        
+        content_layout.addWidget(api_card)
+        content_layout.addStretch()
+        
+        layout.addWidget(content)
+        
+        # 底部按钮区域
+        button_container = QWidget()
+        button_container.setStyleSheet("background-color: white; border-top: 1px solid #E2E8F0;")
+        button_layout = QHBoxLayout(button_container)
+        button_layout.setContentsMargins(30, 20, 30, 20)
+        button_layout.setSpacing(12)
+        
+        button_layout.addStretch()
+        
+        save_btn = QPushButton("💾 保存配置")
+        save_btn.setMinimumHeight(44)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3B82F6, stop:1 #2563EB);
+                border: none;
+                color: white;
+                font-weight: 600;
+                font-size: 14px;
+                border-radius: 8px;
+                padding: 10px 32px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2563EB, stop:1 #1D4ED8);
+            }
+        """)
+        save_btn.clicked.connect(self.save)
+        button_layout.addWidget(save_btn)
+        
+        layout.addWidget(button_container)
+    
+    def open_activation_dialog(self):
+        """打开激活管理对话框"""
+        dialog = ActivationDialog(self, self.parent.license_manager)
+        dialog.exec()
+    
     def save(self):
-        s = QSettings("MySoft", "InvoiceMaster"); s.setValue("ak", self.ak.text()); s.setValue("sk", self.sk.text()); s.setValue("theme", self.cb_th.currentText()); self.accept()
+        s = QSettings("MySoft", "InvoiceMaster")
+        s.setValue("ak", self.ak.text())
+        s.setValue("sk", self.sk.text())
+        s.setValue("theme", self.cb_th.currentText())
+        self.accept()
+
+
+class ActivationDialog(QDialog):
+    """激活管理对话框"""
+    def __init__(self, parent, license_manager):
+        super().__init__(parent)
+        self.license_manager = license_manager
+        self.setWindowTitle("激活管理")
+        self.resize(550, 520)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #F8FAFC;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # 渐变标题栏
+        header = QWidget()
+        header.setFixedHeight(100)
+        header.setStyleSheet("""
+            background: qlineargradient(
+                x1:0, y1:0, x2:1, y2:0,
+                stop:0 #2563EB,
+                stop:1 #7C3AED
+            );
+            border-radius: 0px;
+        """)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(30, 20, 30, 20)
+        header_layout.setSpacing(5)
+        
+        title = QLabel("🔑 Excel 导出功能激活")
+        title.setStyleSheet("""
+            font-size: 22px;
+            font-weight: 700;
+            color: white;
+            background: transparent;
+        """)
+        header_layout.addWidget(title)
+        
+        subtitle = QLabel("管理您的软件授权和试用状态")
+        subtitle.setStyleSheet("""
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.9);
+            background: transparent;
+        """)
+        header_layout.addWidget(subtitle)
+        
+        layout.addWidget(header)
+        
+        # 内容区域
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(30, 30, 30, 30)
+        content_layout.setSpacing(20)
+        
+        # 激活状态卡片
+        info = self.license_manager.get_activation_info()
+        status_card = QFrame()
+        status_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+            }
+        """)
+        
+        status_shadow = QGraphicsDropShadowEffect()
+        status_shadow.setBlurRadius(20)
+        status_shadow.setColor(QColor(0, 0, 0, 30))
+        status_shadow.setOffset(0, 2)
+        status_card.setGraphicsEffect(status_shadow)
+        
+        status_layout = QVBoxLayout(status_card)
+        status_layout.setContentsMargins(20, 20, 20, 20)
+        status_layout.setSpacing(10)
+        
+        if info['is_activated']:
+            status_text = "✅ 已激活"
+            status_color = "#10B981"
+            status_bg = "#ECFDF5"
+        else:
+            remaining = info['remaining_trials']
+            status_text = f"⚠️ 未激活 (剩余试用: {remaining}/10次)"
+            status_color = "#F59E0B"
+            status_bg = "#FEF3C7"
+        
+        self.status_label = QLabel(status_text)
+        self.status_label.setStyleSheet(f"""
+            font-size: 16px;
+            font-weight: 600;
+            color: {status_color};
+            padding: 12px 20px;
+            background: {status_bg};
+            border-radius: 8px;
+        """)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status_layout.addWidget(self.status_label)
+        
+        content_layout.addWidget(status_card)
+        
+        # 机器码卡片
+        machine_card = QFrame()
+        machine_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+            }
+        """)
+        
+        machine_shadow = QGraphicsDropShadowEffect()
+        machine_shadow.setBlurRadius(20)
+        machine_shadow.setColor(QColor(0, 0, 0, 30))
+        machine_shadow.setOffset(0, 2)
+        machine_card.setGraphicsEffect(machine_shadow)
+        
+        machine_layout = QVBoxLayout(machine_card)
+        machine_layout.setContentsMargins(20, 20, 20, 20)
+        machine_layout.setSpacing(12)
+        
+        machine_title = QLabel("📱 机器码")
+        machine_title.setStyleSheet("""
+            font-size: 15px;
+            font-weight: 600;
+            color: #1E293B;
+        """)
+        machine_layout.addWidget(machine_title)
+        
+        hint = QLabel("请将以下机器码发送给开发者以获取激活码")
+        hint.setStyleSheet("""
+            color: #64748B;
+            font-size: 12px;
+        """)
+        machine_layout.addWidget(hint)
+        
+        machine_code_layout = QHBoxLayout()
+        self.machine_code_edit = QLineEdit(self.license_manager.get_machine_code())
+        self.machine_code_edit.setReadOnly(True)
+        self.machine_code_edit.setStyleSheet("""
+            font-family: 'Courier New', monospace;
+            font-size: 15px;
+            font-weight: 600;
+            padding: 12px 16px;
+            background: #F1F5F9;
+            border: 2px solid #E2E8F0;
+            border-radius: 8px;
+            color: #1E293B;
+        """)
+        machine_code_layout.addWidget(self.machine_code_edit)
+        
+        copy_btn = QPushButton("📋 复制")
+        copy_btn.setFixedWidth(90)
+        copy_btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                border: 1.5px solid #CBD5E1;
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-weight: 500;
+                color: #475569;
+            }
+            QPushButton:hover {
+                background-color: #F8FAFC;
+                border-color: #2563EB;
+                color: #2563EB;
+            }
+        """)
+        copy_btn.clicked.connect(self.copy_machine_code)
+        machine_code_layout.addWidget(copy_btn)
+        
+        machine_layout.addLayout(machine_code_layout)
+        content_layout.addWidget(machine_card)
+        
+        # 激活码卡片
+        activation_card = QFrame()
+        activation_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+            }
+        """)
+        
+        activation_shadow = QGraphicsDropShadowEffect()
+        activation_shadow.setBlurRadius(20)
+        activation_shadow.setColor(QColor(0, 0, 0, 30))
+        activation_shadow.setOffset(0, 2)
+        activation_card.setGraphicsEffect(activation_shadow)
+        
+        activation_layout = QVBoxLayout(activation_card)
+        activation_layout.setContentsMargins(20, 20, 20, 20)
+        activation_layout.setSpacing(12)
+        
+        activation_title = QLabel("🔐 激活码")
+        activation_title.setStyleSheet("""
+            font-size: 15px;
+            font-weight: 600;
+            color: #1E293B;
+        """)
+        activation_layout.addWidget(activation_title)
+        
+        activation_hint = QLabel("请输入从开发者处获得的激活码")
+        activation_hint.setStyleSheet("""
+            color: #64748B;
+            font-size: 12px;
+        """)
+        activation_layout.addWidget(activation_hint)
+        
+        self.activation_code_edit = QLineEdit()
+        self.activation_code_edit.setPlaceholderText("XXXX-XXXX-XXXX-XXXX")
+        self.activation_code_edit.setStyleSheet("""
+            font-family: 'Courier New', monospace;
+            font-size: 15px;
+            font-weight: 600;
+            padding: 12px 16px;
+            background: white;
+            border: 2px solid #CBD5E1;
+            border-radius: 8px;
+            color: #1E293B;
+        """)
+        activation_layout.addWidget(self.activation_code_edit)
+        
+        content_layout.addWidget(activation_card)
+        content_layout.addStretch()
+        
+        layout.addWidget(content)
+        
+        # 底部按钮区域
+        button_container = QWidget()
+        button_container.setStyleSheet("background-color: white; border-top: 1px solid #E2E8F0;")
+        button_layout = QHBoxLayout(button_container)
+        button_layout.setContentsMargins(30, 20, 30, 20)
+        button_layout.setSpacing(12)
+        
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setMinimumHeight(44)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                border: 1.5px solid #CBD5E1;
+                border-radius: 8px;
+                padding: 10px 32px;
+                font-weight: 500;
+                color: #475569;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #F8FAFC;
+                border-color: #2563EB;
+                color: #2563EB;
+            }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        button_layout.addStretch()
+        
+        activate_btn = QPushButton("🔓 立即激活")
+        activate_btn.setMinimumHeight(44)
+        activate_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3B82F6, stop:1 #2563EB);
+                border: none;
+                color: white;
+                font-weight: 600;
+                font-size: 14px;
+                border-radius: 8px;
+                padding: 10px 32px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2563EB, stop:1 #1D4ED8);
+            }
+        """)
+        activate_btn.clicked.connect(self.activate)
+        button_layout.addWidget(activate_btn)
+        
+        layout.addWidget(button_container)
+    
+    def copy_machine_code(self):
+        """复制机器码到剪贴板"""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self.machine_code_edit.text())
+        QMessageBox.information(self, "成功", "机器码已复制到剪贴板！")
+    
+    def activate(self):
+        """激活软件"""
+        activation_code = self.activation_code_edit.text().strip()
+        if not activation_code:
+            QMessageBox.warning(self, "错误", "请输入激活码！")
+            return
+        
+        if self.license_manager.activate(activation_code):
+            QMessageBox.information(self, "成功", "激活成功！感谢您的支持！")
+            self.accept()
+        else:
+            QMessageBox.critical(self, "失败", "激活码无效，请检查后重试！")
 
 class AboutDialog(QDialog):
     def __init__(self, parent):
-        super().__init__(parent); self.setWindowTitle("关于作者"); self.resize(400, 320)
-        layout = QVBoxLayout(self); layout.setContentsMargins(30, 30, 30, 30); layout.setSpacing(25)
-        txt = QLabel("本软件不收集任何数据和隐私。\n如果这个软件对你有帮助，不妨请我喝杯咖啡或奶茶。\n如果你欣赏这个软件，感谢你的认可与支持！")
-        txt.setAlignment(Qt.AlignmentFlag.AlignCenter); txt.setWordWrap(True)
-        txt.setStyleSheet("color: #555; font-size: 13px; line-height: 1.5;")
-        qr_layout = QHBoxLayout(); qr_layout.setSpacing(30); qr_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        def make_qr(path, t):
+        super().__init__(parent)
+        self.setWindowTitle("关于")
+        self.resize(500, 520)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #F8FAFC;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # 渐变标题栏
+        header = QWidget()
+        header.setFixedHeight(100)
+        header.setStyleSheet("""
+            background: qlineargradient(
+                x1:0, y1:0, x2:1, y2:0,
+                stop:0 #2563EB,
+                stop:1 #7C3AED
+            );
+        """)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(30, 20, 30, 20)
+        header_layout.setSpacing(5)
+        
+        title = QLabel(f"{APP_NAME}")
+        title.setStyleSheet("""
+            font-size: 22px;
+            font-weight: 700;
+            color: white;
+            background: transparent;
+        """)
+        header_layout.addWidget(title)
+        
+        subtitle = QLabel(f"{APP_VERSION} · {APP_AUTHOR_CN}")
+        subtitle.setStyleSheet("""
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.9);
+            background: transparent;
+        """)
+        header_layout.addWidget(subtitle)
+        
+        layout.addWidget(header)
+        
+        # 内容区域
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(30, 30, 30, 30)
+        content_layout.setSpacing(20)
+        
+        # 说明文字卡片
+        text_card = QFrame()
+        text_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+            }
+        """)
+        
+        text_shadow = QGraphicsDropShadowEffect()
+        text_shadow.setBlurRadius(20)
+        text_shadow.setColor(QColor(0, 0, 0, 30))
+        text_shadow.setOffset(0, 2)
+        text_card.setGraphicsEffect(text_shadow)
+        
+        text_layout = QVBoxLayout(text_card)
+        text_layout.setContentsMargins(20, 20, 20, 20)
+        text_layout.setSpacing(10)
+        
+        txt = QLabel("本软件不收集任何数据和隐私。\n如果这个软件对你有帮助，不妨请我喝杯咖啡或奶茶。\n感谢你的认可与支持！")
+        txt.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        txt.setWordWrap(True)
+        txt.setStyleSheet("""
+            color: #64748B;
+            font-size: 13px;
+            line-height: 24px;
+        """)
+        text_layout.addWidget(txt)
+        
+        content_layout.addWidget(text_card)
+        
+        # 二维码卡片
+        qr_card = QFrame()
+        qr_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+            }
+        """)
+        
+        qr_shadow = QGraphicsDropShadowEffect()
+        qr_shadow.setBlurRadius(20)
+        qr_shadow.setColor(QColor(0, 0, 0, 30))
+        qr_shadow.setOffset(0, 2)
+        qr_card.setGraphicsEffect(qr_shadow)
+        
+        qr_layout = QHBoxLayout(qr_card)
+        qr_layout.setContentsMargins(20, 20, 20, 20)
+        qr_layout.setSpacing(30)
+        qr_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        def make_qr(path, t, icon):
             real_path = resource_path(path)
-            w = QWidget(); wl = QVBoxLayout(w); wl.setContentsMargins(0,0,0,0); wl.setSpacing(10); wl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            IMG_SIZE = 140; CONT_SIZE = IMG_SIZE + 10
-            l = QLabel(); l.setFixedSize(CONT_SIZE, CONT_SIZE); l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            l.setStyleSheet("background:white; border:1px solid #ddd; border-radius:8px")
-            if os.path.exists(real_path): l.setPixmap(QPixmap(real_path).scaled(IMG_SIZE, IMG_SIZE, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            else: l.setText(t); l.setStyleSheet(f"background:#f0f0f0; border:1px solid #ccc; border-radius:8px; color:#999; font-size:14px; qproperty-alignment: AlignCenter;")
-            tl = QLabel(t); tl.setAlignment(Qt.AlignmentFlag.AlignCenter); tl.setStyleSheet("color:#333; font-size:14px; font-weight:bold;")
-            wl.addWidget(l); wl.addWidget(tl); return w
-        qr_layout.addWidget(make_qr("qr1.jpg", "打赏")); qr_layout.addWidget(make_qr("qr2.jpg", "加好友"))
-        layout.addWidget(txt); layout.addLayout(qr_layout)
+            w = QWidget()
+            wl = QVBoxLayout(w)
+            wl.setContentsMargins(0, 0, 0, 0)
+            wl.setSpacing(12)
+            wl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+            IMG_SIZE = 130
+            CONT_SIZE = IMG_SIZE + 20
+            
+            l = QLabel()
+            l.setFixedSize(CONT_SIZE, CONT_SIZE)
+            l.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            l.setStyleSheet("""
+                background: white;
+                border: 2px solid #E2E8F0;
+                border-radius: 12px;
+                padding: 8px;
+            """)
+            
+            if os.path.exists(real_path):
+                l.setPixmap(QPixmap(real_path).scaled(
+                    IMG_SIZE, IMG_SIZE,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                ))
+            else:
+                l.setText(icon)
+                l.setStyleSheet("""
+                    background: #F1F5F9;
+                    border: 2px solid #CBD5E1;
+                    border-radius: 12px;
+                    color: #94A3B8;
+                    font-size: 48px;
+                """)
+            
+            tl = QLabel(t)
+            tl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            tl.setStyleSheet("""
+                color: #1E293B;
+                font-size: 14px;
+                font-weight: 600;
+            """)
+            
+            wl.addWidget(l)
+            wl.addWidget(tl)
+            return w
+        
+        qr_layout.addWidget(make_qr(resource_path("qr1.jpg"), "打赏", "💰"))
+        qr_layout.addWidget(make_qr(resource_path("qr2.jpg"), "加好友", "👋"))
+        
+        content_layout.addWidget(qr_card)
+        content_layout.addStretch()
+        
+        layout.addWidget(content)
 
 class HandScrollArea(QScrollArea):
     def __init__(self, parent_widget):
@@ -579,35 +1586,136 @@ class DynamicSplashScreen(QWidget):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(450, 280)
-        main_layout = QVBoxLayout(self); main_layout.setContentsMargins(10, 10, 10, 10)
-        self.card = QFrame(); 
+        self.setFixedSize(500, 320)
         
-        # [V3.6.0] 方案 B: 94% 透明度 + 淡边框
+        # 主布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 渐变背景卡片
+        self.card = QFrame()
         self.card.setStyleSheet("""
             QFrame {
-                background-color: rgba(255, 255, 255, 240);
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #2563EB,
+                    stop:1 #7C3AED
+                );
                 border-radius: 16px;
-                border: 1px solid rgba(0, 0, 0, 15);
             }
         """)
         
-        shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(20); shadow.setColor(QColor(0, 0, 0, 60)); shadow.setOffset(0, 5)
-        self.card.setGraphicsEffect(shadow); main_layout.addWidget(self.card)
-        card_layout = QVBoxLayout(self.card); card_layout.setContentsMargins(30, 40, 30, 40); card_layout.setSpacing(20)
-        title_lbl = QLabel(APP_NAME); title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_lbl.setStyleSheet("color: #333; font-weight: bold; font-size: 28px; letter-spacing: 2px; background: transparent; border: none;")
+        # 阴影效果
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(0, 0, 0, 100))
+        shadow.setOffset(0, 8)
+        self.card.setGraphicsEffect(shadow)
+        main_layout.addWidget(self.card)
+        
+        # 卡片内容布局
+        card_layout = QVBoxLayout(self.card)
+        card_layout.setContentsMargins(40, 50, 40, 50)
+        card_layout.setSpacing(20)
+        
+        # 应用名称
+        title_lbl = QLabel(APP_NAME)
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_lbl.setStyleSheet("""
+            color: white;
+            font-weight: 700;
+            font-size: 28px;
+            letter-spacing: 2px;
+            background: transparent;
+            border: none;
+        """)
         card_layout.addWidget(title_lbl)
-        ver_lbl = QLabel(APP_VERSION); ver_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ver_lbl.setStyleSheet("color: #999; font-size: 14px; margin-bottom: 20px; background: transparent; border: none;")
+        
+        # 版本号
+        ver_lbl = QLabel(APP_VERSION)
+        ver_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ver_lbl.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            background: transparent;
+            border: none;
+        """)
         card_layout.addWidget(ver_lbl)
-        self.progress = QProgressBar(); self.progress.setFixedHeight(6); self.progress.setTextVisible(False)
-        self.progress.setStyleSheet("QProgressBar { border: none; background-color: #e0e0e0; border-radius: 3px; } QProgressBar::chunk { background-color: #007AFF; border-radius: 3px; }")
+        
+        card_layout.addSpacing(10)
+        
+        # 进度条
+        self.progress = QProgressBar()
+        self.progress.setFixedHeight(6)
+        self.progress.setTextVisible(False)
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                background-color: rgba(255, 255, 255, 0.2);
+                border-radius: 3px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(255, 255, 255, 0.8),
+                    stop:1 rgba(255, 255, 255, 1)
+                );
+                border-radius: 3px;
+            }
+        """)
         card_layout.addWidget(self.progress)
-        self.status_lbl = QLabel("正在初始化..."); self.status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_lbl.setStyleSheet("color: #888; font-size: 12px; background: transparent; border: none;")
+        
+        # 状态文字
+        self.status_lbl = QLabel("正在初始化...")
+        self.status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_lbl.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+            background: transparent;
+            border: none;
+        """)
         card_layout.addWidget(self.status_lbl)
-        self.timer = QTimer(); self.timer.timeout.connect(self.update_progress); self.timer.start(25); self.counter = 0
+        
+        card_layout.addStretch()
+        
+        # 版权信息
+        copyright_lbl = QLabel(f"© {APP_AUTHOR_CN}")
+        copyright_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        copyright_lbl.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 11px;
+            background: transparent;
+            border: none;
+        """)
+        card_layout.addWidget(copyright_lbl)
+        
+        # 扫光效果
+        self.shine = QLabel(self.card)
+        self.shine.setFixedSize(100, 320)
+        self.shine.setStyleSheet("""
+            background: qlineargradient(
+                x1:0, y1:0, x2:1, y2:0,
+                stop:0 rgba(255, 255, 255, 0),
+                stop:0.5 rgba(255, 255, 255, 0.3),
+                stop:1 rgba(255, 255, 255, 0)
+            );
+        """)
+        self.shine.move(-100, 0)
+        
+        # 扫光动画
+        self.shine_anim = QPropertyAnimation(self.shine, b"pos")
+        self.shine_anim.setDuration(2000)
+        self.shine_anim.setStartValue(QPoint(-100, 0))
+        self.shine_anim.setEndValue(QPoint(500, 0))
+        self.shine_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.shine_anim.setLoopCount(-1)
+        self.shine_anim.start()
+        
+        # 进度定时器
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_progress)
+        self.timer.start(25)
+        self.counter = 0
     def update_progress(self):
         self.counter += 1; self.progress.setValue(self.counter)
         if self.counter < 40: self.status_lbl.setText("正在加载核心组件...")
@@ -627,6 +1735,7 @@ class MainWindow(QMainWindow):
         self.preview_timer = QTimer(); self.preview_timer.setSingleShot(True); self.preview_timer.timeout.connect(self.generate_realtime_preview)
         self.current_printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         self.right_panel = None; self.settings_card = None
+        self.license_manager = LicenseManager()
         self.init_ui()
         ThemeManager.apply(QApplication.instance())
         self.change_theme("Light")
@@ -648,9 +1757,47 @@ class MainWindow(QMainWindow):
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu); self.list.customContextMenuRequested.connect(self.ctx_menu)
         self.list.itemDoubleClicked.connect(self.edit_item); self.list.itemClicked.connect(self.show_single_doc)
         
-        tb = QHBoxLayout(); 
-        self.btn_set = QPushButton(" 设置"); self.btn_set.setIcon(Icons.get("settings")); self.btn_set.clicked.connect(lambda: SettingsDlg(self).exec())
-        self.btn_del = QPushButton(" 清空"); self.btn_del.setIcon(Icons.get("trash", "#d73a49")); self.btn_del.setObjectName("DangerBtn"); self.btn_del.clicked.connect(self.clear)
+        tb = QHBoxLayout(); tb.setSpacing(10)
+        self.btn_set = QPushButton("设置")
+        self.btn_set.setMinimumHeight(44)
+        self.btn_set.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3B82F6, stop:1 #2563EB);
+                border: none;
+                color: white;
+                font-weight: 600;
+                font-size: 14px;
+                border-radius: 8px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2563EB, stop:1 #1D4ED8);
+            }
+        """)
+        self.btn_set.clicked.connect(lambda: SettingsDlg(self).exec())
+        
+        self.btn_del = QPushButton("清空")
+        self.btn_del.setMinimumHeight(44)
+        self.btn_del.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #60A5FA, stop:1 #3B82F6);
+                border: none;
+                color: white;
+                font-weight: 600;
+                font-size: 14px;
+                border-radius: 8px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3B82F6, stop:1 #2563EB);
+            }
+        """)
+        self.btn_del.clicked.connect(self.clear)
+        
         tb.addWidget(self.btn_set); tb.addStretch(); tb.addWidget(self.btn_del)
         
         lv.addWidget(self.drag); lv.addWidget(QLabel("发票清单 (双击修正):", objectName="Title")); lv.addWidget(self.list); lv.addLayout(tb)
@@ -678,7 +1825,6 @@ class MainWindow(QMainWindow):
             for p in QPrinterInfo.availablePrinterNames(): self.cb_pr.addItem(f"🖨️ {p}")
         self.cb_pr.currentIndexChanged.connect(self.on_printer_changed)
         
-        # [V3.0] 纯文字属性按钮
         self.btn_prop = QPushButton("属性"); self.btn_prop.setObjectName("PropBtn"); self.btn_prop.setFixedSize(60, 30)
         self.btn_prop.clicked.connect(self.open_printer_props)
         self.btn_prop.setEnabled(False)
@@ -720,7 +1866,7 @@ class MainWindow(QMainWindow):
         self.btn_go = QPushButton(" 开始打印"); self.btn_go.setObjectName("PrimaryBtn"); self.btn_go.setIcon(Icons.get("print", "white")); self.btn_go.setMinimumHeight(50)
         self.btn_go.clicked.connect(self.run); rv.addWidget(self.btn_go)
         
-        btn_about = QPushButton(" 关于作者"); btn_about.clicked.connect(lambda: AboutDialog(self).exec())
+        btn_about = QPushButton(" 关于本软件"); btn_about.clicked.connect(lambda: AboutDialog(self).exec())
         rv.addWidget(btn_about); rv.addStretch()
 
         layout.addWidget(left); layout.addWidget(mid, 1); layout.addWidget(self.right_panel)
@@ -782,9 +1928,15 @@ class MainWindow(QMainWindow):
 
     def show_layout_preview(self): self.stack.setCurrentIndex(0); self.trigger_refresh()
     def edit_item(self, item):
-        row = self.list.row(item); old_val = self.data[row]['a']; val, ok = QInputDialog.getDouble(self, "修正金额", "请输入正确金额:", old_val, 0, 1000000, 2)
-        if ok: 
-            self.data[row]['a'] = val; widget = self.list.itemWidget(item); widget.update_display(self.data[row])
+        row = self.list.row(item)
+        old_val = self.data[row].get('a', 0)
+        val, ok = QInputDialog.getDouble(self, "修正金额", "请输入正确金额:", old_val, 0.00, 1000000, 2)
+        if ok:
+            self.data[row]['a'] = val
+            self.data[row]['manually_edited'] = True
+            widget = self.list.itemWidget(item)
+            if widget:
+                widget.update_display(self.data[row])
             self.calc()
     
     def on_printer_changed(self, idx):
@@ -852,6 +2004,29 @@ class MainWindow(QMainWindow):
     def xls(self):
         logger = logging.getLogger(__name__)
         if not self.data: return
+        
+        # 检查激活状态
+        info = self.license_manager.get_activation_info()
+        if not info['is_activated']:
+            if info['remaining_trials'] <= 0:
+                # 试用次数用完，必须激活
+                QMessageBox.warning(self, "需要激活", "试用次数已用完，请激活软件后继续使用。")
+                dialog = ActivationDialog(self, self.license_manager)
+                if dialog.exec() != QDialog.DialogCode.Accepted:
+                    return
+                # 激活成功后继续
+            else:
+                # 还有试用次数，显示提示并询问是否继续
+                remaining = info['remaining_trials']
+                reply = QMessageBox.question(
+                    self, 
+                    "试用提示", 
+                    f"您还有 {remaining} 次免费导出机会。\n\n是否继续导出？\n（导出成功后将使用1次机会）",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return  # 用户选择不继续，直接返回，不扣次数
         
         logger.info(f"开始导出 Excel: {len(self.data)} 条数据")
         
@@ -941,6 +2116,12 @@ class MainWindow(QMainWindow):
                 else:
                     msg += "✓ 未检测到重复发票"
                 
+                # 导出成功后，扣除试用次数（如果未激活）
+                info = self.license_manager.get_activation_info()
+                if not info['is_activated']:
+                    self.license_manager.increment_trial_count()
+                    logger.info("试用次数已扣除")
+                
                 QMessageBox.information(self, "导出成功", msg)
                 
             except Exception as e:
@@ -961,6 +2142,7 @@ class MainWindow(QMainWindow):
         
         paper = self.cb_pap.currentText().replace("纸张: ", "") if "纸张: " in self.cb_pap.currentText() else self.cb_pap.currentText()
         try:
+            # 裁剪线开关直接控制是否显示裁剪线(预览和打印都遵循此设置)
             PDFEngine.merge([x["p"] for x in self.data], m, paper, o, self.chk_cut.isChecked(), out)
             if self.cb_pr.currentIndex() == 0:
                 if platform.system() == "Windows": 
