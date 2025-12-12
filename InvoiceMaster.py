@@ -1320,44 +1320,25 @@ class AboutDialog(QDialog):
         title = QLabel(f"{APP_NAME}")
         title.setStyleSheet("""
             font-size: 22px;
-            font-weight: 700;
-            color: white;
-            background: transparent;
-        """)
-        header_layout.addWidget(title)
+        header_layout.setContentsMargins(40, 40, 40, 40)
+        header_layout.setSpacing(10)
         
-        subtitle = QLabel(f"{APP_VERSION} · {APP_AUTHOR_CN}")
-        subtitle.setStyleSheet("""
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.9);
-            background: transparent;
-        """)
-        header_layout.addWidget(subtitle)
+        title = QLabel("智能发票打印助手")
+        title.setStyleSheet("color: white; font-size: 32px; font-weight: bold;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        version = QLabel("V1.0.0 · © 会钓鱼的猫")
+        version.setStyleSheet("color: rgba(255,255,255,0.9); font-size: 16px;")
+        version.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        header_layout.addWidget(title)
+        header_layout.addWidget(version)
+        header_layout.addStretch()
         
         layout.addWidget(header)
         
-        # 内容区域
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(30, 30, 30, 30)
-        content_layout.setSpacing(20)
-        
-        # 说明文字卡片
-        text_card = QFrame()
-        text_card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 12px;
-            }
-        """)
-        
-        text_shadow = QGraphicsDropShadowEffect()
-        text_shadow.setBlurRadius(20)
-        text_shadow.setColor(QColor(0, 0, 0, 30))
-        text_shadow.setOffset(0, 2)
-        text_card.setGraphicsEffect(text_shadow)
-        
-        text_layout = QVBoxLayout(text_card)
+        # 文字说明
+        text_layout = QVBoxLayout()
         text_layout.setContentsMargins(20, 20, 20, 20)
         text_layout.setSpacing(10)
         
@@ -1365,28 +1346,20 @@ class AboutDialog(QDialog):
         txt.setAlignment(Qt.AlignmentFlag.AlignCenter)
         txt.setWordWrap(True)
         txt.setStyleSheet("""
-            color: #64748B;
-            font-size: 13px;
-            line-height: 24px;
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 10px;
         """)
-        text_layout.addWidget(txt)
-        
-        content_layout.addWidget(text_card)
         
         # 二维码卡片
-        qr_card = QFrame()
+        qr_card = QWidget()
         qr_card.setStyleSheet("""
-            QFrame {
-                background-color: white;
+            QWidget {
+                background: white;
                 border-radius: 12px;
             }
         """)
-        
-        qr_shadow = QGraphicsDropShadowEffect()
-        qr_shadow.setBlurRadius(20)
-        qr_shadow.setColor(QColor(0, 0, 0, 30))
-        qr_shadow.setOffset(0, 2)
-        qr_card.setGraphicsEffect(qr_shadow)
         
         qr_layout = QHBoxLayout(qr_card)
         qr_layout.setContentsMargins(20, 20, 20, 20)
@@ -1399,12 +1372,17 @@ class AboutDialog(QDialog):
             IMG_SIZE = 140; CONT_SIZE = IMG_SIZE + 10
             l = QLabel(); l.setFixedSize(CONT_SIZE, CONT_SIZE); l.setAlignment(Qt.AlignmentFlag.AlignCenter)
             l.setStyleSheet("background:white; border:1px solid #ddd; border-radius:8px")
-            if os.path.exists(real_path): l.setPixmap(QPixmap(real_path).scaled(IMG_SIZE, IMG_SIZE, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            if os.path.exists(real_path): 
+                pixmap = QPixmap(real_path)
+                l.setPixmap(pixmap.scaled(IMG_SIZE, IMG_SIZE, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
             else: l.setText(t); l.setStyleSheet(f"background:#f0f0f0; border:1px solid #ccc; border-radius:8px; color:#999; font-size:14px; qproperty-alignment: AlignCenter;")
             tl = QLabel(t); tl.setAlignment(Qt.AlignmentFlag.AlignCenter); tl.setStyleSheet("color:#333; font-size:14px; font-weight:bold;")
             wl.addWidget(l); wl.addWidget(tl); return w
         qr_layout.addWidget(make_qr("qr1.jpg", "打赏", "💰")); qr_layout.addWidget(make_qr("qr2.jpg", "加好友", "👋"))
-        layout.addWidget(txt); layout.addLayout(qr_layout)
+        
+        text_layout.addWidget(txt)
+        text_layout.addWidget(qr_card)
+        layout.addLayout(text_layout)
 
 class HandScrollArea(QScrollArea):
     def __init__(self, parent_widget):
