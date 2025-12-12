@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QGraphicsDropShadowEffect, QSizePolicy, QMenu, 
                              QScrollArea, QStackedWidget, QInputDialog, QProgressBar,
                              QToolButton)
-from PyQt6.QtCore import Qt, QSettings, QSize, QMimeData, pyqtSignal, QByteArray, QRectF, QPointF, QTimer, QEvent
+from PyQt6.QtCore import Qt, QSettings, QSize, QMimeData, pyqtSignal, QByteArray, QRectF, QPointF, QTimer, QEvent, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt6.QtGui import QPixmap, QIcon, QDragEnterEvent, QDropEvent, QImage, QColor, QPainter, QPalette, QPen, QFont, QAction, QCursor, QPageLayout, QTransform
 from PyQt6.QtPrintSupport import QPrinterInfo, QPageSetupDialog, QPrinter, QPrintDialog
 
@@ -1360,7 +1360,7 @@ class AboutDialog(QDialog):
         text_layout.setContentsMargins(20, 20, 20, 20)
         text_layout.setSpacing(10)
         
-        txt = QLabel("本软件不收集任何数据和隐私。\n如果这个软件对你有帮助，不妨请我喝杯咖啡或奶茶。\n感谢你的认可与支持！")
+        txt = QLabel("本软件不收集任何数据和隐私\n如果这个软件对你有帮助，不妨请我喝杯咖啡或奶茶。\n感谢你的认可与支持！")
         txt.setAlignment(Qt.AlignmentFlag.AlignCenter)
         txt.setWordWrap(True)
         txt.setStyleSheet("""
