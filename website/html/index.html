@@ -558,7 +558,7 @@
         <ul class="nav-links">
             <li><a href="#features">功能特性</a></li>
             <li><a href="#download">下载安装</a></li>
-            <li><a href="#docs">使用文档</a></li>
+            <li><a href="#guide">配置教程</a></li>
             <li><a href="#about">关于我们</a></li>
         </ul>
     </nav>
@@ -754,8 +754,8 @@
                     <div class="download-dropdown">
                         <select class="download-select" onchange="if(this.value) window.location.href=this.value">
                             <option value="">选择版本下载</option>
-                            <option value="#win10">Windows 10/11 版</option>
-                            <option value="#win7">Windows 7 兼容版</option>
+                            <option value="/api/download/智能发票打印助手-Win10.exe">Windows 10/11 版</option>
+                            <option value="/api/download/智能发票打印助手-Win7.exe">Windows 7 兼容版</option>
                         </select>
                         <span class="dropdown-arrow">▼</span>
                     </div>
@@ -771,14 +771,7 @@
                     </div>
                     <h4>macOS</h4>
                     <p class="version">适用于 macOS 11+</p>
-                    <div class="download-dropdown">
-                        <select class="download-select" onchange="if(this.value) window.location.href=this.value">
-                            <option value="">选择版本下载</option>
-                            <option value="#mac-intel">Intel 芯片版</option>
-                            <option value="#mac-arm">Apple Silicon 版</option>
-                        </select>
-                        <span class="dropdown-arrow">▼</span>
-                    </div>
+                    <a href="/api/download/智能发票打印_For_Mac.zip" class="btn btn-primary">立即下载</a>
                 </div>
                 <div class="download-card">
                     <div class="os-icon">
@@ -799,14 +792,60 @@
                     </div>
                     <h4>Linux / UOS</h4>
                     <p class="version">适用于 Ubuntu/Debian/UOS</p>
-                    <a href="#linux" class="btn btn-primary">立即下载</a>
+                    <a href="/api/download/智能发票打印_Linux版" class="btn btn-primary">立即下载</a>
                 </div>
+            </div>
+        </div>
+    </section>
+    <section id="guide" class="features" style="background: rgba(0,0,0,0.2); padding-top: 4rem;">
+        <h2 class="section-title">📖 OCR配置教程</h2>
+        <p class="section-subtitle">配置百度OCR接口，解锁发票智能识别功能</p>
+
+        <div style="max-width: 800px; margin: 2rem auto; text-align: left;">
+            <div class="feature-card" style="margin-bottom: 1.5rem;">
+                <h3 style="color: #3B82F6; margin-bottom: 1rem;">🔧 第一步：注册百度AI开放平台</h3>
+                <p>1. 访问 <a href="https://ai.baidu.com" target="_blank" style="color: #60A5FA;">ai.baidu.com</a>
+                    并注册/登录账号</p>
+                <p>2. 完成实名认证（个人/企业均可）</p>
+            </div>
+
+            <div class="feature-card" style="margin-bottom: 1.5rem;">
+                <h3 style="color: #3B82F6; margin-bottom: 1rem;">📝 第二步：创建应用</h3>
+                <p>1. 进入控制台 → 文字识别 → 创建应用</p>
+                <p>2. 应用名称填写：智能发票助手（任意名称）</p>
+                <p>3. 勾选"财务票据识别" → "增值税发票识别"</p>
+                <p>4. 创建成功后获取 <strong>API Key</strong> 和 <strong>Secret Key</strong></p>
+            </div>
+
+            <div class="feature-card" style="margin-bottom: 1.5rem;">
+                <h3 style="color: #3B82F6; margin-bottom: 1rem;">🎁 第三步：领取免费额度</h3>
+                <p>1. 进入 文字识别 → 概览 → 领取免费资源</p>
+                <p>2. 勾选"增值税发票识别"并领取</p>
+                <p>3. 免费额度：<strong>1000次/月</strong>（个人认证）</p>
+            </div>
+
+            <div class="feature-card" style="margin-bottom: 1.5rem;">
+                <h3 style="color: #3B82F6; margin-bottom: 1rem;">⚙️ 第四步：配置软件</h3>
+                <p>1. 打开智能发票打印助手</p>
+                <p>2. 点击右上角 ⚙️ 设置按钮</p>
+                <p>3. 填入 API Key 和 Secret Key</p>
+                <p>4. 保存后即可使用OCR识别功能</p>
+            </div>
+
+            <div
+                style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.5); border-radius: 12px; padding: 1.5rem; margin-top: 2rem;">
+                <h4 style="color: #60A5FA; margin-bottom: 0.5rem;">💡 常见问题</h4>
+                <p style="color: rgba(255,255,255,0.8); font-size: 0.9rem; line-height: 1.8;">
+                    • <strong>全电发票</strong>没有"发票代码"和"校验码"字段，这是正常的<br>
+                    • 如遇 <strong>QPS限制</strong>，请稍等几秒后重试<br>
+                    • 如遇 <strong>image format error</strong>，请确保使用最新版软件
+                </p>
             </div>
         </div>
     </section>
 
     <footer id="about">
-        <p>© 2024 智能发票打印助手 | 由 <a href="#">会钓鱼的猫</a> 开发维护</p>
+        <p>© 2025 智能发票打印助手 | 由 <a href="#">会钓鱼的猫</a> 开发维护</p>
         <p style="margin-top: 0.5rem;">如有问题请联系开发者获取支持</p>
     </footer>
 </body>

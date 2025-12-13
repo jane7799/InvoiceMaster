@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  activation-service:
+    build: .
+    container_name: invoice-activation
+    ports:
+      - "6300:5000"
+    environment:
+      # 修改这个密钥以匹配你的InvoiceMaster应用
+      - SECRET_KEY=InvoiceMaster2024SecretKey#@!
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3

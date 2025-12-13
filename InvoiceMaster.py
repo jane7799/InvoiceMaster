@@ -170,7 +170,8 @@ class Icons:
         "layout_1x1_card": """<svg viewBox="0 0 48 48" fill="none"><rect x="8" y="6" width="32" height="36" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="10">发票</text></svg>""",
         "layout_1x2_card_v": """<svg viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="16" height="36" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="6" width="16" height="36" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="14" y="24" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="8">发票</text><text x="34" y="24" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="8">发票</text></svg>""",
         "layout_1x2_card_h": """<svg viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="36" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="6" y="26" width="36" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="24" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="8">发票</text><text x="24" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="8">发票</text></svg>""",
-        "layout_2x2_card": """<svg viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="6" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="6" y="26" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="26" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="14" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="34" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="14" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="34" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text></svg>"""
+        "layout_2x2_card": """<svg viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="6" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="6" y="26" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="26" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="14" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="34" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="14" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="34" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text></svg>""",
+        "monitor": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>"""
     }
     @staticmethod
     def get(name, color="#555"):
@@ -544,9 +545,42 @@ class InvoiceHelper:
             return {}
         try:
             logger.info(f"OCR 识别开始: {os.path.basename(fp)}")
-            t = requests.get(f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={ak}&client_secret={sk}").json().get("access_token")
-            with open(fp,'rb') as f: b = base64.b64encode(f.read()).decode()
+            # 获取access_token
+            token_resp = requests.get(f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={ak}&client_secret={sk}").json()
+            if "error" in token_resp:
+                logger.error(f"OCR Token获取失败: {token_resp.get('error_description', token_resp.get('error'))}")
+                return {}
+            t = token_resp.get("access_token")
+            if not t:
+                logger.error("OCR Token为空")
+                return {}
+            
+            # 处理PDF文件：先转成图片
+            if fp.lower().endswith('.pdf'):
+                import fitz
+                doc = fitz.open(fp)
+                page = doc[0]  # 取第一页
+                # 高分辨率渲染
+                mat = fitz.Matrix(2.0, 2.0)
+                pix = page.get_pixmap(matrix=mat)
+                img_data = pix.tobytes("png")
+                doc.close()
+                b = base64.b64encode(img_data).decode()
+            else:
+                with open(fp,'rb') as f: 
+                    b = base64.b64encode(f.read()).decode()
+            
+            # 添加短暂延迟避免QPS限制
+            import time
+            time.sleep(0.6)  # 600ms延迟，确保不超过2QPS
+            
             r = requests.post(f"https://aip.baidubce.com/rest/2.0/ocr/v1/vat_invoice?access_token={t}", data={"image":b}, headers={'content-type':'application/x-www-form-urlencoded'}).json()
+            
+            # 检查API错误
+            if "error_code" in r:
+                logger.error(f"OCR API错误: {r.get('error_code')} - {r.get('error_msg')}")
+                return {}
+            
             wr = r.get("words_result", {})
             items = wr.get("CommodityName", [])
             item_str = ",".join([x.get("word","") for x in items]) if isinstance(items, list) else str(items)
@@ -1989,7 +2023,9 @@ class MainWindow(QMainWindow):
             for p in QPrinterInfo.availablePrinterNames(): self.cb_pr.addItem(f"🖨️ {p}")
         self.cb_pr.currentIndexChanged.connect(self.on_printer_changed)
         
-        self.btn_prop = QPushButton("属性"); self.btn_prop.setObjectName("PropBtn"); self.btn_prop.setFixedSize(60, 30)
+        self.btn_prop = QPushButton(); self.btn_prop.setObjectName("PropBtn"); self.btn_prop.setFixedSize(32, 32)
+        self.btn_prop.setIcon(Icons.get("settings", "#64748B")); self.btn_prop.setIconSize(QSize(18, 18))
+        self.btn_prop.setToolTip("打印机属性")
         self.btn_prop.clicked.connect(self.open_printer_props)
         self.btn_prop.setEnabled(False)
         r_pr.addWidget(self.cb_pr, 1); r_pr.addWidget(self.btn_prop); self.settings_layout.addLayout(r_pr)
