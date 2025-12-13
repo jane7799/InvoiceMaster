@@ -15,6 +15,20 @@ from logging.handlers import RotatingFileHandler
 from license_manager import LicenseManager
 from workers import OcrWorker, PdfWorker, PrintWorker
 
+# ==========================================
+# 从模块导入核心类（模块化架构）
+# 修改 src/ 中的代码后自动生效，无需同步到本文件
+# ==========================================
+try:
+    from src.core import InvoiceHelper, PDFEngine, PrinterEngine, InvoiceDatabase
+    from src.utils import LogManager, Icons, SecurityValidator, ExportManager
+    from src.themes import ThemeManager
+    from src.ui import ShortcutManager
+    _USE_MODULES = True
+except ImportError:
+    # 模块导入失败时使用本文件内的定义
+    _USE_MODULES = False
+
 # 屏蔽 SSL 警告
 warnings.filterwarnings("ignore", category=UserWarning, module='urllib3')
 
