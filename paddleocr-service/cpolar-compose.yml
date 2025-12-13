@@ -1,0 +1,6 @@
+services:
+  cpolar:
+    image: probezy/cpolar
+    container_name: cpolar-tunnel
+    network_mode: host
+    restart: unless-stopped

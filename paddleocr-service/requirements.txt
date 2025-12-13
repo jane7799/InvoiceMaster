@@ -1,0 +1,5 @@
+flask>=2.0.0
+paddlepaddle>=2.5.0
+paddleocr>=2.6.0
+PyMuPDF>=1.22.0
+gunicorn>=21.0.0

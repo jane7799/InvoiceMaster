@@ -1,0 +1,9 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-ocr
+    command: tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 run --token eyJhIjoiYTY5MDhmOGY0MWUyYzg2NjhjNzgwOGNiNWUwODY0NmIiLCJ0IjoiNjBhZGJlNTQtZmMxNS00Y2FhLWFkNDUtMjViZDVjMzBlMThiIiwicyI6Ik9EY3lNVEU1TmpBdE5UZzVOeTAwT1RreExUbGxaall0WVdNd09HWXdNMlE1WW1OayJ9
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1

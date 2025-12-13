@@ -540,11 +540,82 @@ class InvoiceHelper:
     @staticmethod
     def ocr(fp, ak, sk):
         logger = logging.getLogger(__name__)
+        s = QSettings("MySoft", "InvoiceMaster")
+        private_ocr_url = s.value("private_ocr_url", "")
+        
+        # 优先尝试私有OCR服务
+        if private_ocr_url:
+            try:
+                result = InvoiceHelper._call_private_ocr(fp, private_ocr_url, logger)
+                if result:
+                    logger.info(f"私有OCR成功: {os.path.basename(fp)}")
+                    return result
+            except Exception as e:
+                logger.warning(f"私有OCR失败: {str(e)}，回退到百度OCR")
+        
+        # 回退到百度云OCR
+        return InvoiceHelper._call_baidu_ocr(fp, ak, sk, logger)
+    
+    @staticmethod
+    def _call_private_ocr(fp, private_ocr_url, logger):
+        """调用私有PaddleOCR服务"""
+        logger.info(f"尝试私有OCR: {os.path.basename(fp)}")
+        
+        # 处理PDF文件：先转成图片
+        if fp.lower().endswith('.pdf'):
+            import fitz
+            doc = fitz.open(fp)
+            page = doc[0]
+            mat = fitz.Matrix(2.0, 2.0)
+            pix = page.get_pixmap(matrix=mat)
+            img_data = pix.tobytes("png")
+            doc.close()
+            b = base64.b64encode(img_data).decode()
+        else:
+            with open(fp, 'rb') as f:
+                b = base64.b64encode(f.read()).decode()
+        
+        # 调用私有OCR API
+        url = f"{private_ocr_url}/ocr/invoice"
+        resp = requests.post(url, json={"image": b}, timeout=30)
+        
+        if resp.status_code != 200:
+            raise Exception(f"私有OCR返回错误: {resp.status_code}")
+        
+        data = resp.json()
+        if not data.get("success"):
+            raise Exception(f"私有OCR识别失败: {data.get('error', '未知错误')}")
+        
+        # 转换返回格式与百度OCR一致
+        result = {
+            "date": data.get("date", ""),
+            "amount": float(data.get("amount", 0) or 0),
+            "amount_without_tax": data.get("amount_without_tax", ""),
+            "tax_amt": data.get("tax_amt", ""),
+            "tax_rate": data.get("tax_rate", ""),
+            "seller": data.get("seller", ""),
+            "seller_tax_id": data.get("seller_tax_id", ""),
+            "buyer": data.get("buyer", ""),
+            "buyer_tax_id": data.get("buyer_tax_id", ""),
+            "code": data.get("code", ""),
+            "number": data.get("number", ""),
+            "check_code": data.get("check_code", ""),
+            "invoice_type": data.get("invoice_type", ""),
+            "item_name": data.get("item_name", ""),
+            "remark": data.get("remark", ""),
+            "machine_code": data.get("machine_code", ""),
+        }
+        logger.info(f"私有OCR识别成功: {os.path.basename(fp)}, 金额: {result.get('amount', 0)}")
+        return result
+    
+    @staticmethod
+    def _call_baidu_ocr(fp, ak, sk, logger):
+        """调用百度云OCR服务"""
         if not ak:
             logger.warning("OCR 未配置 API Key")
             return {}
         try:
-            logger.info(f"OCR 识别开始: {os.path.basename(fp)}")
+            logger.info(f"百度OCR识别开始: {os.path.basename(fp)}")
             # 获取access_token
             token_resp = requests.get(f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={ak}&client_secret={sk}").json()
             if "error" in token_resp:
@@ -606,10 +677,10 @@ class InvoiceHelper:
                 "remark": wr.get("Remarks", ""),  # 备注
                 "machine_code": wr.get("MachineCode", ""),  # 机器编号
             }
-            logger.info(f"OCR 识别成功: {os.path.basename(fp)}, 金额: {result.get('amount', 0)}")
+            logger.info(f"百度OCR识别成功: {os.path.basename(fp)}, 金额: {result.get('amount', 0)}")
             return result
         except Exception as e:
-            logger.error(f"OCR 识别失败: {os.path.basename(fp)}, 错误: {str(e)}")
+            logger.error(f"百度OCR识别失败: {os.path.basename(fp)}, 错误: {str(e)}")
             return {}
 
 class PDFEngine:
@@ -1152,6 +1223,55 @@ class SettingsDlg(QDialog):
         api_layout.addWidget(self.sk)
         
         content_layout.addWidget(api_card)
+        
+        # 私有OCR配置卡片
+        private_ocr_card = QFrame()
+        private_ocr_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+            }
+        """)
+        
+        private_ocr_shadow = QGraphicsDropShadowEffect()
+        private_ocr_shadow.setBlurRadius(20)
+        private_ocr_shadow.setColor(QColor(0, 0, 0, 30))
+        private_ocr_shadow.setOffset(0, 2)
+        private_ocr_card.setGraphicsEffect(private_ocr_shadow)
+        
+        private_ocr_layout = QVBoxLayout(private_ocr_card)
+        private_ocr_layout.setContentsMargins(20, 20, 20, 20)
+        private_ocr_layout.setSpacing(15)
+        
+        private_ocr_title = QLabel("🏠 私有 OCR 服务（可选）")
+        private_ocr_title.setStyleSheet("""
+            font-size: 15px;
+            font-weight: 600;
+            color: #1E293B;
+        """)
+        private_ocr_layout.addWidget(private_ocr_title)
+        
+        private_ocr_hint = QLabel("配置后优先使用私有服务，失败时自动回退到百度OCR")
+        private_ocr_hint.setStyleSheet("color: #64748B; font-size: 12px;")
+        private_ocr_layout.addWidget(private_ocr_hint)
+        
+        self.private_ocr_url = QLineEdit(s.value("private_ocr_url", ""))
+        self.private_ocr_url.setPlaceholderText("例如: http://192.168.1.4:8891 或 http://xxx.cpolar.top")
+        self.private_ocr_url.setStyleSheet("""
+            QLineEdit {
+                padding: 10px 12px;
+                border: 2px solid #CBD5E1;
+                border-radius: 8px;
+                background: white;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border-color: #10B981;
+            }
+        """)
+        private_ocr_layout.addWidget(self.private_ocr_url)
+        
+        content_layout.addWidget(private_ocr_card)
         content_layout.addStretch()
         
         layout.addWidget(content)
@@ -1197,6 +1317,7 @@ class SettingsDlg(QDialog):
         s = QSettings("MySoft", "InvoiceMaster")
         s.setValue("ak", self.ak.text())
         s.setValue("sk", self.sk.text())
+        s.setValue("private_ocr_url", self.private_ocr_url.text().strip().rstrip('/'))
         s.setValue("theme", self.cb_th.currentText())
         self.accept()
 

@@ -1,0 +1,15 @@
+services:
+  paddleocr:
+    build: .
+    container_name: paddleocr-api
+    ports:
+      - "8891:8891"
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
