@@ -33,7 +33,7 @@ from PyQt6.QtPrintSupport import QPrinterInfo, QPageSetupDialog, QPrinter, QPrin
 # ==========================================
 # 全局配置
 # ==========================================
-APP_VERSION = "V1.0.0"
+APP_VERSION = "V1.0.2"
 APP_NAME = "智能发票打印助手"
 APP_AUTHOR_CN = "© 会钓鱼的猫" 
 
