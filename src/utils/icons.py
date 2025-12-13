@@ -1,0 +1,37 @@
+"""
+图标资源模块
+"""
+from PyQt6.QtGui import QIcon, QPixmap, QImage
+from PyQt6.QtCore import QByteArray
+
+
+class Icons:
+    """SVG 图标管理器"""
+    
+    _SVGS = {
+        "upload": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>""",
+        "settings": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>""",
+        "trash": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>""",
+        "excel": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>""",
+        "print": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>""",
+        "file": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>""",
+        "prev": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>""",
+        "next": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>""",
+        "zoom_in": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>""",
+        "zoom_out": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>""",
+        "layout_1x1_card": """<svg viewBox="0 0 48 48" fill="none"><rect x="8" y="6" width="32" height="36" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="10">发票</text></svg>""",
+        "layout_1x2_card_v": """<svg viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="16" height="36" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="6" width="16" height="36" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="14" y="24" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="8">发票</text><text x="34" y="24" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="8">发票</text></svg>""",
+        "layout_1x2_card_h": """<svg viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="36" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="6" y="26" width="36" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="24" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="8">发票</text><text x="24" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="8">发票</text></svg>""",
+        "layout_2x2_card": """<svg viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="6" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="6" y="26" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="26" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="14" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="34" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="14" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="34" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text></svg>""",
+        "monitor": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>"""
+    }
+    
+    @staticmethod
+    def get(name, color="#555"):
+        """获取指定颜色的图标"""
+        svg_data = Icons._SVGS.get(name, "")
+        if not svg_data:
+            return QIcon()
+        return QIcon(QPixmap.fromImage(
+            QImage.fromData(QByteArray(svg_data.format(c=color).encode()))
+        ))

@@ -13,6 +13,7 @@ import warnings
 import logging
 from logging.handlers import RotatingFileHandler
 from license_manager import LicenseManager
+from workers import OcrWorker, PdfWorker, PrintWorker
 
 # 屏蔽 SSL 警告
 warnings.filterwarnings("ignore", category=UserWarning, module='urllib3')
@@ -51,7 +52,8 @@ def _detect_platform():
         "shadow_blur": 25,
         "shadow_opacity": 25,
         "is_legacy": False,
-        "platform_name": system
+        "platform_name": system,
+        "preview_render_scale": 6.0  # 现代系统使用最高分辨率预览
     }
     
     if system == "Windows":
@@ -68,7 +70,8 @@ def _detect_platform():
                     "shadow_blur": 10,
                     "shadow_opacity": 15,
                     "is_legacy": True,
-                    "platform_name": "Windows 7"
+                    "platform_name": "Windows 7",
+                    "preview_render_scale": 4.0  # Win7 最低分辨率
                 })
             else:
                 config["platform_name"] = "Windows 10+"
@@ -81,7 +84,8 @@ def _detect_platform():
             "use_gradients": True,
             "shadow_blur": 15,
             "shadow_opacity": 20,
-            "platform_name": "Linux/UOS"
+            "platform_name": "Linux/UOS",
+            "preview_render_scale": 5.0  # Linux 使用中等分辨率
         })
     
     return config
@@ -791,6 +795,98 @@ class PrinterEngine:
 # ==========================================
 # 3. UI 组件
 # ==========================================
+
+class ProgressDialog(QDialog):
+    """异步操作进度对话框"""
+    cancelled = pyqtSignal()
+    
+    def __init__(self, parent, title="处理中", can_cancel=True):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.setFixedSize(420, 180)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 25, 30, 25)
+        layout.setSpacing(15)
+        
+        # 标题标签
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #1E293B;")
+        layout.addWidget(self.title_label)
+        
+        # 当前文件标签
+        self.file_label = QLabel("准备中...")
+        self.file_label.setStyleSheet("font-size: 13px; color: #64748B;")
+        layout.addWidget(self.file_label)
+        
+        # 进度条
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                border-radius: 8px;
+                background-color: #E2E8F0;
+                height: 16px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                border-radius: 8px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #60A5FA, stop:0.5 #3B82F6, stop:1 #2563EB);
+            }
+        """)
+        layout.addWidget(self.progress_bar)
+        
+        # 按钮布局
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        if can_cancel:
+            self.cancel_btn = QPushButton("取消")
+            self.cancel_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #F1F5F9;
+                    border: 1.5px solid #E2E8F0;
+                    border-radius: 8px;
+                    padding: 8px 24px;
+                    color: #475569;
+                    font-weight: 500;
+                }
+                QPushButton:hover {
+                    background-color: #E2E8F0;
+                    border-color: #CBD5E1;
+                }
+            """)
+            self.cancel_btn.clicked.connect(self._on_cancel)
+            btn_layout.addWidget(self.cancel_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        self._is_cancelled = False
+        
+    def _on_cancel(self):
+        self._is_cancelled = True
+        self.cancelled.emit()
+        self.file_label.setText("正在取消...")
+        self.cancel_btn.setEnabled(False)
+        
+    def update_progress(self, current, total, filename=""):
+        percent = int((current / total) * 100) if total > 0 else 0
+        self.progress_bar.setValue(percent)
+        self.file_label.setText(f"正在处理 ({current}/{total}): {filename}")
+        QApplication.processEvents()
+        
+    def set_title(self, title):
+        self.title_label.setText(title)
+        
+    def is_cancelled(self):
+        return self._is_cancelled
+
 class Card(QFrame):
     def __init__(self):
         super().__init__(); self.setObjectName("Card")
@@ -1807,7 +1903,7 @@ class AdvancedPreviewArea(QWidget):
         self.raw_page_images = page_images; self.render_pages()
         self.lbl_page.setText(f"共 {len(page_images)} 页")
 
-    def render_pages(self, high_quality=False):
+    def render_pages(self, high_quality=True):
         while self.scroll_layout.count():
             item = self.scroll_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
@@ -1816,8 +1912,8 @@ class AdvancedPreviewArea(QWidget):
             page_lbl = QLabel(); pix = QPixmap.fromImage(img)
             view_width = self.scroll_area.viewport().width() - 60
             if view_width < 300: view_width = 300
-            mode = Qt.TransformationMode.SmoothTransformation if high_quality else Qt.TransformationMode.FastTransformation
-            scaled_pix = pix.scaledToWidth(view_width, mode)
+            # 始终使用高质量渲染，避免滚动时模糊
+            scaled_pix = pix.scaledToWidth(view_width, Qt.TransformationMode.SmoothTransformation)
             page_lbl.setPixmap(scaled_pix)
             shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(25); shadow.setColor(QColor(0,0,0,120)); shadow.setOffset(0, 8)
             page_lbl.setGraphicsEffect(shadow)
@@ -1864,12 +1960,12 @@ class SingleDocViewer(HandScrollArea):
         h_ratio = (view_size.height() - 40) / self.current_pixmap.height()
         self.zoom_level = min(w_ratio, h_ratio)
         self.refresh_view(True)
-    def refresh_view(self, high_quality=False):
+    def refresh_view(self, high_quality=True):
         if not self.current_pixmap: return
         target_w = int(self.current_pixmap.width() * self.zoom_level)
         target_h = int(self.current_pixmap.height() * self.zoom_level)
-        mode = Qt.TransformationMode.SmoothTransformation if high_quality else Qt.TransformationMode.FastTransformation
-        scaled_pix = self.current_pixmap.scaled(target_w, target_h, Qt.AspectRatioMode.KeepAspectRatio, mode)
+        # 始终使用高质量渲染
+        scaled_pix = self.current_pixmap.scaled(target_w, target_h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         self.label.setPixmap(scaled_pix)
         shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(30); shadow.setColor(QColor(0,0,0,180)); shadow.setOffset(0, 10)
         self.label.setGraphicsEffect(shadow)
@@ -2033,6 +2129,13 @@ class MainWindow(QMainWindow):
         self.current_printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         self.right_panel = None; self.settings_card = None
         self.license_manager = LicenseManager()
+        
+        # 异步工作线程引用
+        self.ocr_worker = None
+        self.pdf_worker = None
+        self.print_worker = None
+        self.progress_dialog = None
+        
         self.init_ui()
         ThemeManager.apply(QApplication.instance())
         self.change_theme("Light")
@@ -2234,7 +2337,9 @@ class MainWindow(QMainWindow):
             paper = self.cb_pap.currentText().replace("纸张: ", "") if "纸张: " in self.cb_pap.currentText() else self.cb_pap.currentText()
             doc = PDFEngine.merge([f], "1x1", paper, o, self.chk_cut.isChecked(), out_path=None)
             if doc:
-                pix = doc[0].get_pixmap(matrix=fitz.Matrix(3.0, 3.0))
+                # 使用平台自适应的渲染分辨率
+                scale = UI_CONFIG.get("preview_render_scale", 4.0)
+                pix = doc[0].get_pixmap(matrix=fitz.Matrix(scale, scale))
                 img = QImage.fromData(pix.tobytes("ppm"))
                 
                 # [V3.4.0] 单张预览也需要反向旋转修复 (与排版预览逻辑保持一致)
@@ -2288,7 +2393,9 @@ class MainWindow(QMainWindow):
         page_imgs = []
         if self.current_doc:
             for page in self.current_doc: 
-                pix = page.get_pixmap(matrix=fitz.Matrix(3.0, 3.0)); img = QImage.fromData(pix.tobytes("ppm"))
+                # 使用平台自适应的渲染分辨率
+                scale = UI_CONFIG.get("preview_render_scale", 4.0)
+                pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale)); img = QImage.fromData(pix.tobytes("ppm"))
                 if rotate_preview:
                     transform = QTransform()
                     transform.rotate(-90) 
@@ -2297,25 +2404,121 @@ class MainWindow(QMainWindow):
         self.word_preview.show_pages(page_imgs)
 
     def add_files(self, fs):
+        """添加文件并异步执行 OCR 识别"""
         logger = logging.getLogger(__name__)
         logger.info(f"开始添加 {len(fs)} 个文件")
-        s=QSettings("MySoft","InvoiceMaster"); ak,sk=s.value("ak"),s.value("sk")
-        for f in fs:
+        s = QSettings("MySoft", "InvoiceMaster")
+        ak, sk = s.value("ak"), s.value("sk")
+        
+        # 先同步添加所有文件到列表（快速响应用户）
+        files_with_index = []
+        start_idx = len(self.data)
+        
+        for i, f in enumerate(fs):
             logger.info(f"添加文件: {os.path.basename(f)}")
-            d = {"p":f, "n":os.path.basename(f), "d":"", "a":0.0, "ext": {}}
-            item = QListWidgetItem(self.list); item.setSizeHint(QSize(250, 60))
-            widget = InvoiceItemWidget(d, item, self.delete_specific_item); self.list.setItemWidget(item, widget)
-            QApplication.processEvents()
-            if f.endswith(".pdf"): amt, dt = InvoiceHelper.parse_amount_local(f); d["a"] = amt; d["d"] = dt
+            d = {"p": f, "n": os.path.basename(f), "d": "", "a": 0.0, "ext": {}, "_pending_ocr": True}
+            
+            # 快速本地解析金额
+            if f.endswith(".pdf"):
+                amt, dt = InvoiceHelper.parse_amount_local(f)
+                d["a"] = amt
+                d["d"] = dt
+            
+            item = QListWidgetItem(self.list)
+            item.setSizeHint(QSize(250, 60))
+            widget = InvoiceItemWidget(d, item, self.delete_specific_item)
+            self.list.setItemWidget(item, widget)
+            
+            self.data.append(d)
+            widget.update_display(d)
+            
+            # 记录需要 OCR 的文件
             if ak:
-                r=InvoiceHelper.ocr(f,ak,sk)
-                if r: 
-                    if "amount" in r: d["a"]=r["amount"]
-                    if "date" in r: d["d"]=r["date"]
-                    d["ext"] = r
-            self.data.append(d); widget.update_display(d)
-        logger.info(f"文件添加完成，共 {len(self.data)} 个发票")
-        self.calc(); self.show_layout_preview()
+                files_with_index.append((start_idx + i, f))
+        
+        self.calc()
+        self.show_layout_preview()
+        QApplication.processEvents()
+        
+        # 如果配置了 API Key，启动异步 OCR
+        if ak and files_with_index:
+            self._start_async_ocr(files_with_index, ak, sk)
+        else:
+            logger.info(f"文件添加完成，共 {len(self.data)} 个发票（无 OCR）")
+    
+    def _start_async_ocr(self, files_with_index, ak, sk):
+        """启动异步 OCR 处理"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"启动异步 OCR，共 {len(files_with_index)} 个文件")
+        
+        # 创建进度对话框
+        self.progress_dialog = ProgressDialog(self, "OCR 识别中", can_cancel=True)
+        
+        # 创建 OCR 工作线程
+        self.ocr_worker = OcrWorker(files_with_index, ak, sk, self)
+        self.ocr_worker.progress.connect(self._on_ocr_progress)
+        self.ocr_worker.result.connect(self._on_ocr_result)
+        self.ocr_worker.error.connect(self._on_ocr_error)
+        self.ocr_worker.finished_all.connect(self._on_ocr_finished)
+        
+        # 取消处理
+        self.progress_dialog.cancelled.connect(self.ocr_worker.cancel)
+        
+        # 启动工作线程和显示对话框
+        self.ocr_worker.start()
+        self.progress_dialog.show()
+    
+    def _on_ocr_progress(self, current, total, filename):
+        """OCR 进度更新"""
+        if self.progress_dialog:
+            self.progress_dialog.update_progress(current, total, filename)
+    
+    def _on_ocr_result(self, idx, result):
+        """OCR 单个结果返回"""
+        logger = logging.getLogger(__name__)
+        if idx < len(self.data):
+            d = self.data[idx]
+            d["_pending_ocr"] = False
+            
+            if result:
+                if "amount" in result:
+                    d["a"] = result["amount"]
+                if "date" in result:
+                    d["d"] = result["date"]
+                d["ext"] = result
+                logger.info(f"OCR 结果已更新: {d['n']}, 金额: {d.get('a', 0)}")
+            
+            # 更新列表项显示
+            item = self.list.item(idx)
+            if item:
+                widget = self.list.itemWidget(item)
+                if widget:
+                    widget.update_display(d)
+            
+            # 更新统计
+            self.calc()
+    
+    def _on_ocr_error(self, idx, error_msg):
+        """OCR 单个错误处理"""
+        logger = logging.getLogger(__name__)
+        if idx < len(self.data):
+            d = self.data[idx]
+            d["_pending_ocr"] = False
+            logger.warning(f"OCR 失败 [{d['n']}]: {error_msg}")
+    
+    def _on_ocr_finished(self):
+        """OCR 全部完成"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"异步 OCR 处理完成，共 {len(self.data)} 个发票")
+        
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+        
+        self.ocr_worker = None
+        self.calc()
+        self.show_layout_preview()
+
     def calc(self): t=sum(x["a"] for x in self.data); self.lbl_inf.setText(f"{len(self.data)} 张发票"); self.lbl_tot.setText(f"¥ {t:,.2f}")
     def clear(self): self.list.clear(); self.data=[]; self.calc(); self.trigger_refresh()
     def ctx_menu(self, p): m=QMenu(); a=QAction("删除",self); a.triggered.connect(self.del_sel); m.addAction(a); m.exec(self.list.mapToGlobal(p))
@@ -2613,36 +2816,98 @@ class MainWindow(QMainWindow):
             logger.error(f"Excel 导出失败: {str(e)}", exc_info=True)
             QMessageBox.critical(self, "导出失败", f"错误: {str(e)}")
     def run(self):
-        if not self.data: return QMessageBox.warning(self,"Tips","请先添加发票")
-        self.btn_go.setText("处理中..."); QApplication.processEvents()
-        m="1x1"; m="1x2" if self.b2.isChecked() else m; m="2x2" if self.b4.isChecked() else m
-        o="H" if self.rd_l.isChecked() else "V"; out = os.path.expanduser("~/Desktop/Print_Job.pdf")
+        """执行打印操作（异步）"""
+        if not self.data: 
+            return QMessageBox.warning(self, "Tips", "请先添加发票")
         
-        if out not in self.temp_files: self.temp_files.append(out)
+        self.btn_go.setText("处理中...")
+        self.btn_go.setEnabled(False)
+        QApplication.processEvents()
+        
+        # 准备参数
+        m = "1x1"
+        m = "1x2" if self.b2.isChecked() else m
+        m = "2x2" if self.b4.isChecked() else m
+        o = "H" if self.rd_l.isChecked() else "V"
+        out = os.path.expanduser("~/Desktop/Print_Job.pdf")
+        
+        if out not in self.temp_files:
+            self.temp_files.append(out)
         
         paper = self.cb_pap.currentText().replace("纸张: ", "") if "纸张: " in self.cb_pap.currentText() else self.cb_pap.currentText()
-        try:
-            # 裁剪线开关直接控制是否显示裁剪线(预览和打印都遵循此设置)
-            PDFEngine.merge([x["p"] for x in self.data], m, paper, o, self.chk_cut.isChecked(), out)
-            if self.cb_pr.currentIndex() == 0:
-                if platform.system() == "Windows": 
-                    os.startfile(out, "print") 
-                elif platform.system() == "Darwin":  # macOS
-                    os.system(f"open '{out}'")
-                else:  # Linux/UOS
-                    os.system(f"xdg-open '{out}'")
-                self.btn_go.setText(" 开始打印")
+        
+        # 保存打印参数供回调使用
+        self._print_params = {
+            "out_path": out,
+            "open_only": self.cb_pr.currentIndex() == 0,
+            "copies": self.sp_cpy.value(),
+            "force_rotate": self.chk_rotate.isChecked()
+        }
+        
+        # 使用异步 PDF 合并
+        files = [x["p"] for x in self.data]
+        self.pdf_worker = PdfWorker(files, m, paper, o, self.chk_cut.isChecked(), out, self)
+        self.pdf_worker.progress.connect(self._on_pdf_progress)
+        self.pdf_worker.finished.connect(self._on_pdf_merge_finished)
+        self.pdf_worker.error.connect(self._on_pdf_error)
+        self.pdf_worker.start()
+    
+    def _on_pdf_progress(self, current, total):
+        """PDF 合并进度"""
+        self.btn_go.setText(f"合并 PDF ({current}/{total})...")
+        QApplication.processEvents()
+    
+    def _on_pdf_merge_finished(self, out_path):
+        """PDF 合并完成，开始打印"""
+        self.pdf_worker = None
+        params = self._print_params
+        
+        if params["open_only"]:
+            # 仅打开 PDF
+            if platform.system() == "Windows":
+                os.startfile(out_path, "print")
+            elif platform.system() == "Darwin":
+                os.system(f"open '{out_path}'")
             else:
-                p_name = self.cb_pr.currentText().replace("🖨️ ", ""); copies = self.sp_cpy.value(); self.btn_go.setText(f"正在发送至 {p_name}...")
-                
-                # [V3.2.0] 传递强力纠偏参数
-                force_rotate = self.chk_rotate.isChecked()
-                success, msg = PrinterEngine.print_pdf(out, self.current_printer, copies, force_rotate)
-                
-                if success: 
-                    QMessageBox.information(self,"完成","已发送"); self.btn_go.setText(" 开始打印")
-                else: QMessageBox.critical(self,"错误",msg); self.btn_go.setText(" 开始打印")
-        except Exception as e: self.btn_go.setText("重试"); QMessageBox.critical(self,"Error",str(e))
+                os.system(f"xdg-open '{out_path}'")
+            self.btn_go.setText(" 开始打印")
+            self.btn_go.setEnabled(True)
+        else:
+            # 异步打印
+            self._start_async_print(out_path, params["copies"], params["force_rotate"])
+    
+    def _on_pdf_error(self, error_msg):
+        """PDF 合并错误"""
+        self.pdf_worker = None
+        self.btn_go.setText("重试")
+        self.btn_go.setEnabled(True)
+        QMessageBox.critical(self, "Error", error_msg)
+    
+    def _start_async_print(self, pdf_path, copies, force_rotate):
+        """启动异步打印"""
+        p_name = self.cb_pr.currentText().replace("🖨️ ", "")
+        self.btn_go.setText(f"正在发送至 {p_name}...")
+        
+        self.print_worker = PrintWorker(pdf_path, self.current_printer, copies, force_rotate, self)
+        self.print_worker.progress.connect(self._on_print_progress)
+        self.print_worker.finished.connect(self._on_print_finished)
+        self.print_worker.start()
+    
+    def _on_print_progress(self, current, total):
+        """打印进度"""
+        self.btn_go.setText(f"打印中 ({current}/{total})...")
+        QApplication.processEvents()
+    
+    def _on_print_finished(self, success, msg):
+        """打印完成"""
+        self.print_worker = None
+        self.btn_go.setText(" 开始打印")
+        self.btn_go.setEnabled(True)
+        
+        if success:
+            QMessageBox.information(self, "完成", "已发送")
+        else:
+            QMessageBox.critical(self, "错误", msg)
 
 if __name__ == "__main__":
     # 初始化日志系统
