@@ -35,7 +35,7 @@ jobs:
         run: |
           python -m pip uninstall -y pathlib || true
           # 【关键】--add-data 把二维码打包进去 (Windows用分号;)
-          python -m PyInstaller --name "智能发票打印_Win7兼容版" --windowed --onefile --clean --noconfirm --icon="logo.ico" --add-data "qr1.jpg;." --add-data "qr2.jpg;." InvoiceMaster.py
+          python -m PyInstaller --name "智能发票打印_Win7兼容版" --windowed --onefile --clean --noconfirm --icon="logo.ico" --add-data "qr1.jpg;." --add-data "qr2.jpg;." --add-data "icon_1x1_l.png;." --add-data "icon_1x1_p.png;." --add-data "icon_1x2_l.png;." --add-data "icon_1x2_p.png;." --add-data "icon_2x2_l.png;." --add-data "icon_2x2_p.png;." InvoiceMaster.py
           
       - name: Upload Win7 Artifact
         uses: actions/upload-artifact@v4
@@ -66,7 +66,7 @@ jobs:
       - name: Build Win10 EXE
         run: |
           # Windows 用分号 ;
-          python -m PyInstaller --name "智能发票打印_Win10现代版" --windowed --onefile --clean --noconfirm --icon="logo.ico" --add-data "qr1.jpg;." --add-data "qr2.jpg;." InvoiceMaster.py
+          python -m PyInstaller --name "智能发票打印_Win10现代版" --windowed --onefile --clean --noconfirm --icon="logo.ico" --add-data "qr1.jpg;." --add-data "qr2.jpg;." --add-data "icon_1x1_l.png;." --add-data "icon_1x1_p.png;." --add-data "icon_1x2_l.png;." --add-data "icon_1x2_p.png;." --add-data "icon_2x2_l.png;." --add-data "icon_2x2_p.png;." InvoiceMaster.py
       - name: Upload Win10 Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -95,7 +95,7 @@ jobs:
       - name: Build Mac App
         run: |
           # Mac 用冒号 :
-          python -m PyInstaller --name "智能发票打印_Mac版" --windowed --onefile --clean --noconfirm --icon="logo.icns" --add-data "qr1.jpg:." --add-data "qr2.jpg:." InvoiceMaster.py
+          python -m PyInstaller --name "智能发票打印_Mac版" --windowed --clean --noconfirm --icon="logo.icns" --add-data "qr1.jpg:." --add-data "qr2.jpg:." --add-data "icon_1x1_l.png:." --add-data "icon_1x1_p.png:." --add-data "icon_1x2_l.png:." --add-data "icon_1x2_p.png:." --add-data "icon_2x2_l.png:." --add-data "icon_2x2_p.png:." InvoiceMaster.py
       - name: Upload Mac Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -130,7 +130,7 @@ jobs:
       - name: Build Linux Binary
         run: |
           # Linux 用冒号 :
-          python -m PyInstaller --name "智能发票打印_Linux版" --onefile --clean --noconfirm --add-data "qr1.jpg:." --add-data "qr2.jpg:." InvoiceMaster.py
+          python -m PyInstaller --name "智能发票打印_Linux版" --onefile --clean --noconfirm --add-data "qr1.jpg:." --add-data "qr2.jpg:." --add-data "icon_1x1_l.png:." --add-data "icon_1x1_p.png:." --add-data "icon_1x2_l.png:." --add-data "icon_1x2_p.png:." --add-data "icon_2x2_l.png:." --add-data "icon_2x2_p.png:." InvoiceMaster.py
           
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4

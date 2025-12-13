@@ -11,6 +11,12 @@ a = Analysis(
         ('license_manager.py', '.'),
         ('qr1.jpg', '.'),
         ('qr2.jpg', '.'),
+        ('icon_1x1_l.png', '.'),
+        ('icon_1x1_p.png', '.'),
+        ('icon_1x2_l.png', '.'),
+        ('icon_1x2_p.png', '.'),
+        ('icon_2x2_l.png', '.'),
+        ('icon_2x2_p.png', '.'),
     ],
     hiddenimports=[
         'PyQt6.QtCore',
