@@ -234,6 +234,7 @@ class ThemeManager:
         }
         QWidget#ItemRow {
             background: transparent;
+            border-radius: 10px;
         }
         QLabel#ItemTitle {
             font-weight: 600;
@@ -247,7 +248,7 @@ class ThemeManager:
         QPushButton#RowDelBtn {
             background: transparent;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
         }
         QPushButton#RowDelBtn:hover {
             background-color: #FEE2E2;
@@ -255,22 +256,23 @@ class ThemeManager:
         
         QToolButton#LayoutCard {
             background-color: white;
-            border: 2px solid #CBD5E1;
-            border-radius: 12px;
-            padding: 4px;
+            border: 2px solid #E2E8F0;
+            border-radius: 16px;
+            padding: 6px;
         }
         QToolButton#LayoutCard:hover {
-            border-color: #3B82F6;
-            background-color: #EFF6FF;
-            border-width: 2px;
+            border-color: #60A5FA;
+            background-color: #F0F9FF;
         }
         QToolButton#LayoutCard:checked {
             border: 3px solid #2563EB;
-            background-color: #DBEAFE;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #DBEAFE, stop:1 #EFF6FF);
         }
         QFrame#PreviewControlBar {
             background-color: white;
             border-top: 1px solid #E2E8F0;
+            border-radius: 0px 0px 12px 12px;
         }
         QLabel#PageLabel {
             font-size: 12px;
@@ -295,19 +297,19 @@ class ThemeManager:
     QFrame#Card {
         background-color: white;
         border: 1px solid #E2E8F0;
-        border-radius: 12px;
+        border-radius: 16px;
     }
     QPushButton {
         background-color: white;
-        border: 1.5px solid #CBD5E1;
-        border-radius: 6px;
-        padding: 8px 16px;
+        border: 1.5px solid #E2E8F0;
+        border-radius: 10px;
+        padding: 10px 18px;
         font-weight: 500;
         color: #475569;
     }
     QPushButton:hover {
         background-color: #F8FAFC;
-        border-color: #2563EB;
+        border-color: #3B82F6;
         color: #2563EB;
     }
     QPushButton:pressed {
@@ -316,64 +318,76 @@ class ThemeManager:
     QPushButton#IconBtn {
         background: transparent;
         border: none;
-        border-radius: 6px;
-        padding: 6px;
+        border-radius: 8px;
+        padding: 8px;
     }
     QPushButton#IconBtn:hover {
         background-color: #F1F5F9;
     }
     QPushButton#PrimaryBtn {
         background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-            stop:0 #3B82F6, stop:1 #2563EB);
+            stop:0 #60A5FA, stop:0.5 #3B82F6, stop:1 #2563EB);
         border: none;
         color: white;
         font-weight: 600;
         font-size: 14px;
-        border-radius: 8px;
-        padding: 10px 20px;
+        border-radius: 12px;
+        padding: 12px 24px;
     }
     QPushButton#PrimaryBtn:hover {
         background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-            stop:0 #2563EB, stop:1 #1D4ED8);
+            stop:0 #3B82F6, stop:0.5 #2563EB, stop:1 #1D4ED8);
     }
     QPushButton#DangerBtn {
         color: #DC2626;
     }
     QPushButton#PropBtn {
         color: #475569;
-        border: 1.5px solid #CBD5E1;
+        border: 1.5px solid #E2E8F0;
+        border-radius: 8px;
     }
     QListWidget {
         background-color: white;
         border: 1px solid #E2E8F0;
-        border-radius: 8px;
+        border-radius: 12px;
         outline: none;
-        padding: 4px;
+        padding: 6px;
     }
     QListWidget::item {
         border-bottom: 1px solid #F1F5F9;
-        border-radius: 4px;
-        margin: 2px 0px;
+        border-radius: 8px;
+        margin: 3px 2px;
+        padding: 2px;
     }
     QListWidget::item:selected {
-        background-color: #EFF6FF;
-        border-left: 3px solid #2563EB;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+            stop:0 #DBEAFE, stop:1 #EFF6FF);
+        border-left: 4px solid #2563EB;
         color: #1E293B;
     }
     QListWidget::item:hover {
         background-color: #F8FAFC;
+        border-left: 3px solid #60A5FA;
     }
     QLineEdit, QComboBox, QSpinBox {
-        border: 1.5px solid #CBD5E1;
-        border-radius: 6px;
-        padding: 8px 12px;
+        border: 1.5px solid #E2E8F0;
+        border-radius: 10px;
+        padding: 10px 14px;
         background: white;
-        min-height: 20px;
+        min-height: 22px;
         font-size: 13px;
     }
     QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
-        border-color: #2563EB;
-        background: white;
+        border-color: #3B82F6;
+        background: #FEFEFE;
+    }
+    QComboBox::drop-down {
+        border: none;
+        width: 28px;
+    }
+    QComboBox::down-arrow {
+        width: 12px;
+        height: 12px;
     }
     QGroupBox {
         border: none;
@@ -395,13 +409,13 @@ class ThemeManager:
     QFrame#Card {
         background-color: #1E293B;
         border: 1px solid #334155;
-        border-radius: 12px;
+        border-radius: 16px;
     }
     QPushButton {
         background-color: #1E293B;
         border: 1.5px solid #475569;
-        border-radius: 6px;
-        padding: 8px 16px;
+        border-radius: 10px;
+        padding: 10px 18px;
         color: #E2E8F0;
         font-weight: 500;
     }
@@ -413,17 +427,19 @@ class ThemeManager:
     QPushButton#IconBtn {
         background: transparent;
         border: none;
-        border-radius: 6px;
+        border-radius: 8px;
     }
     QPushButton#IconBtn:hover {
         background-color: #334155;
     }
     QPushButton#PrimaryBtn {
         background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-            stop:0 #3B82F6, stop:1 #2563EB);
+            stop:0 #60A5FA, stop:0.5 #3B82F6, stop:1 #2563EB);
         border: none;
         color: white;
         font-weight: 600;
+        border-radius: 12px;
+        padding: 12px 24px;
     }
     QPushButton#DangerBtn {
         color: #EF4444;
@@ -431,27 +447,29 @@ class ThemeManager:
     QListWidget {
         background-color: #1E293B;
         border: 1px solid #334155;
-        border-radius: 8px;
+        border-radius: 12px;
         outline: none;
-        padding: 4px;
+        padding: 6px;
     }
     QListWidget::item {
         border-bottom: 1px solid #334155;
-        border-radius: 4px;
-        margin: 2px 0px;
+        border-radius: 8px;
+        margin: 3px 2px;
     }
     QListWidget::item:selected {
-        background-color: #1E40AF;
-        border-left: 3px solid #3B82F6;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+            stop:0 #1E40AF, stop:1 #1E3A8A);
+        border-left: 4px solid #3B82F6;
         color: white;
     }
     QListWidget::item:hover {
         background-color: #334155;
+        border-left: 3px solid #60A5FA;
     }
     QLineEdit, QComboBox, QSpinBox {
         border: 1.5px solid #475569;
-        border-radius: 6px;
-        padding: 8px 12px;
+        border-radius: 10px;
+        padding: 10px 14px;
         background: #1E293B;
         color: white;
     }
@@ -473,10 +491,12 @@ class ThemeManager:
     QToolButton#LayoutCard {
         background-color: #1E293B;
         border: 2px solid #475569;
+        border-radius: 16px;
     }
     QToolButton#LayoutCard:checked {
         border-color: #3B82F6;
-        background-color: #1E40AF;
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 #1E40AF, stop:1 #1E3A8A);
     }
     """ + SCROLLBAR_CSS
 
@@ -674,74 +694,92 @@ class Card(QFrame):
         opacity = UI_CONFIG.get("shadow_opacity", 25)
         eff = QGraphicsDropShadowEffect(); eff.setBlurRadius(blur); eff.setColor(QColor(0,0,0,opacity)); eff.setOffset(0,4 if not UI_CONFIG.get("is_legacy") else 2); self.setGraphicsEffect(eff)
 
-class DragArea(QLabel):
+class DragArea(QWidget):
     dropped = pyqtSignal(list)
     def __init__(self):
         super().__init__()
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setAcceptDrops(True)
-        self.setMinimumHeight(120)
+        self.setMinimumHeight(130)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._hover = False
-        self._update_style()
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         
-    def _update_style(self):
+        # 内部布局
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 20, 15, 20)
+        layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 图标
+        self.icon_label = QLabel()
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_label.setPixmap(Icons.get("upload", "#FFFFFF").pixmap(42, 42))
+        self.icon_label.setStyleSheet("background: transparent;")
+        layout.addWidget(self.icon_label)
+        
+        # 提示文字
+        self.text_label = QLabel("拖放文件上传")
+        self.text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.text_label.setStyleSheet("color: rgba(255,255,255,0.9); font-size: 13px; font-weight: 500; background: transparent;")
+        layout.addWidget(self.text_label)
+        
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QBrush, QLinearGradient, QPainterPath
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # 创建圆角矩形路径
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 16, 16)
+        
+        # 创建渐变
+        gradient = QLinearGradient(0, 0, 0, self.height())
         use_gradients = UI_CONFIG.get("use_gradients", True)
         
         if self._hover:
             if use_gradients:
-                bg = """background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                        stop:0 rgba(37, 99, 235, 0.15),
-                        stop:1 rgba(37, 99, 235, 0.05));"""
+                gradient.setColorAt(0, QColor("#2563EB"))
+                gradient.setColorAt(0.5, QColor("#1D4ED8"))
+                gradient.setColorAt(1, QColor("#1E40AF"))
             else:
-                bg = "background: rgba(37, 99, 235, 0.1);"
-            self.setStyleSheet(f"""
-                QLabel {{
-                    border: 2px dashed #2563EB;
-                    border-radius: 12px;
-                    {bg}
-                }}
-            """)
+                gradient.setColorAt(0, QColor("#1D4ED8"))
+                gradient.setColorAt(1, QColor("#1D4ED8"))
         else:
             if use_gradients:
-                bg = """background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                        stop:0 rgba(148, 163, 184, 0.08),
-                        stop:1 rgba(148, 163, 184, 0.02));"""
+                gradient.setColorAt(0, QColor("#60A5FA"))
+                gradient.setColorAt(0.5, QColor("#3B82F6"))
+                gradient.setColorAt(1, QColor("#2563EB"))
             else:
-                bg = "background: rgba(148, 163, 184, 0.05);"
-            self.setStyleSheet(f"""
-                QLabel {{
-                    border: 2px dashed #94A3B8;
-                    border-radius: 12px;
-                    {bg}
-                }}
-            """)
+                gradient.setColorAt(0, QColor("#3B82F6"))
+                gradient.setColorAt(1, QColor("#3B82F6"))
+        
+        painter.fillPath(path, QBrush(gradient))
+        painter.end()
     
     def upd(self, c): 
-        self.setPixmap(Icons.get("upload", c if not self._hover else "#2563EB").pixmap(56, 56))
+        # 始终使用白色图标
+        self.icon_label.setPixmap(Icons.get("upload", "#FFFFFF").pixmap(42, 42))
     
     def enterEvent(self, e):
         self._hover = True
-        self._update_style()
-        self.upd("#2563EB")
+        self.update()  # 触发重绘
         
     def leaveEvent(self, e):
         self._hover = False
-        self._update_style()
-        self.upd("#94A3B8")
+        self.update()  # 触发重绘
         
     def dragEnterEvent(self, e):
         self._hover = True
-        self._update_style()
+        self.update()  # 触发重绘
         e.accept()
         
     def dragLeaveEvent(self, e):
         self._hover = False
-        self._update_style()
+        self.update()  # 触发重绘
         
     def dropEvent(self, e):
         self._hover = False
-        self._update_style()
+        self.update()  # 触发重绘
         self.dropped.emit([u.toLocalFile() for u in e.mimeData().urls() if u.toLocalFile().lower().endswith(('.pdf','.jpg','.png'))])
         
     def mousePressEvent(self, e): 
@@ -1857,13 +1895,9 @@ class MainWindow(QMainWindow):
         # LEFT
         left = QWidget(); left.setFixedWidth(280); lv = QVBoxLayout(left); lv.setContentsMargins(0,0,0,0); lv.setSpacing(12)
         
-        # 拖放区域容器
-        drop_container = QVBoxLayout(); drop_container.setSpacing(8)
+        # 拖放区域
         self.drag = DragArea(); self.drag.dropped.connect(self.add_files)
-        drop_hint = QLabel("拖放文件或点击上传"); drop_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        drop_hint.setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 500;")
-        drop_container.addWidget(self.drag); drop_container.addWidget(drop_hint)
-        lv.addLayout(drop_container)
+        lv.addWidget(self.drag)
         
         # 发票清单标题
         list_title = QLabel("📋 发票清单 (双击修正金额)")
@@ -2097,7 +2131,7 @@ class MainWindow(QMainWindow):
         page_imgs = []
         if self.current_doc:
             for page in self.current_doc: 
-                pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0)); img = QImage.fromData(pix.tobytes("ppm"))
+                pix = page.get_pixmap(matrix=fitz.Matrix(3.0, 3.0)); img = QImage.fromData(pix.tobytes("ppm"))
                 if rotate_preview:
                     transform = QTransform()
                     transform.rotate(-90) 
@@ -2164,9 +2198,55 @@ class MainWindow(QMainWindow):
         s = QSettings("MySoft", "InvoiceMaster")
         last_path = s.value("last_excel_path", os.path.expanduser("~/Desktop/invoice_report.xlsx"))
         
-        # 使用上次路径作为默认值
-        p, _ = QFileDialog.getSaveFileName(self, "保存 Excel 报表", last_path, "Excel (*.xlsx)")
-        if not p: return
+        # 先检查默认路径文件是否存在，提供中文选项
+        file_action = "new"  # new=新建, append=追加, overwrite=覆盖
+        
+        if os.path.exists(last_path):
+            # 文件已存在，显示中文选择对话框
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("文件已存在")
+            msg_box.setText(f"文件 \"{os.path.basename(last_path)}\" 已存在。\n\n请选择操作方式：")
+            msg_box.setIcon(QMessageBox.Icon.Question)
+            
+            append_btn = msg_box.addButton("📥 追加数据", QMessageBox.ButtonRole.AcceptRole)
+            overwrite_btn = msg_box.addButton("🔄 覆盖文件", QMessageBox.ButtonRole.DestructiveRole)
+            newfile_btn = msg_box.addButton("📁 另存为...", QMessageBox.ButtonRole.ActionRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.ButtonRole.RejectRole)
+            
+            msg_box.exec()
+            clicked = msg_box.clickedButton()
+            
+            if clicked == cancel_btn:
+                return
+            elif clicked == append_btn:
+                file_action = "append"
+                p = last_path
+            elif clicked == overwrite_btn:
+                file_action = "overwrite"
+                p = last_path
+            elif clicked == newfile_btn:
+                # 用户选择另存为，打开文件对话框
+                p, _ = QFileDialog.getSaveFileName(self, "保存 Excel 报表", last_path, "Excel (*.xlsx)",
+                                                   options=QFileDialog.Option.DontConfirmOverwrite)
+                if not p: return
+                file_action = "overwrite" if os.path.exists(p) else "new"
+        else:
+            # 文件不存在，使用默认路径或让用户选择
+            p, _ = QFileDialog.getSaveFileName(self, "保存 Excel 报表", last_path, "Excel (*.xlsx)",
+                                               options=QFileDialog.Option.DontConfirmOverwrite)
+            if not p: return
+            
+            # 检查用户选择的新路径是否存在
+            if os.path.exists(p):
+                reply = QMessageBox.question(
+                    self, "确认覆盖",
+                    f"文件 \"{os.path.basename(p)}\" 已存在。\n\n是否覆盖该文件？",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+                file_action = "overwrite"
         
         # 保存路径供下次使用
         s.setValue("last_excel_path", p)
@@ -2210,8 +2290,8 @@ class MainWindow(QMainWindow):
             
             new_df = pd.DataFrame(new_rows)
             
-            # 如果文件已存在，读取并追加
-            if os.path.exists(p):
+            # 根据用户选择决定是追加还是覆盖
+            if file_action == "append" and os.path.exists(p):
                 try:
                     existing_df = pd.read_excel(p)
                     combined_df = pd.concat([existing_df, new_df], ignore_index=True)
@@ -2311,24 +2391,32 @@ class MainWindow(QMainWindow):
                 # 添加工作表保护(安全锁定功能)
                 # 允许: 选择单元格、复制、排序、筛选、查找
                 # 禁止: 编辑内容、删除行列、修改格式、插入行列
+                from openpyxl.worksheet.protection import SheetProtection
                 SHEET_PASSWORD = "InvoiceMaster2024"  # 保护密码
-                ws.protection.sheet = True
-                ws.protection.password = SHEET_PASSWORD
-                ws.protection.enable()
-                # 允许的操作
-                ws.protection.selectLockedCells = True  # 允许选择锁定单元格
-                ws.protection.selectUnlockedCells = True  # 允许选择未锁定单元格
-                ws.protection.sort = True  # 允许排序
-                ws.protection.autoFilter = True  # 允许筛选
-                # 禁止的操作(默认都是False,即禁止)
-                ws.protection.formatCells = False  # 禁止格式化单元格
-                ws.protection.formatColumns = False  # 禁止格式化列
-                ws.protection.formatRows = False  # 禁止格式化行
-                ws.protection.insertColumns = False  # 禁止插入列
-                ws.protection.insertRows = False  # 禁止插入行
-                ws.protection.insertHyperlinks = False  # 禁止插入超链接
-                ws.protection.deleteColumns = False  # 禁止删除列
-                ws.protection.deleteRows = False  # 禁止删除行
+                
+                # 使用 SheetProtection 对象进行更精确的权限控制
+                # 注意: 在 openpyxl 中, True = 允许该操作, False = 禁止该操作
+                ws.protection = SheetProtection(
+                    sheet=True,
+                    password=SHEET_PASSWORD,
+                    # 允许的操作 - 设置为 False 表示不禁止(即允许)
+                    selectLockedCells=False,      # 允许选择锁定单元格
+                    selectUnlockedCells=False,    # 允许选择未锁定单元格
+                    sort=False,                   # 允许排序
+                    autoFilter=False,             # 允许筛选
+                    # 禁止的操作 - 设置为 True 表示禁止
+                    formatCells=True,             # 禁止格式化单元格
+                    formatColumns=True,           # 禁止格式化列
+                    formatRows=True,              # 禁止格式化行
+                    insertColumns=True,           # 禁止插入列
+                    insertRows=True,              # 禁止插入行
+                    insertHyperlinks=True,        # 禁止插入超链接
+                    deleteColumns=True,           # 禁止删除列
+                    deleteRows=True,              # 禁止删除行
+                    objects=False,                # 允许操作对象(确保复制功能)
+                    scenarios=False,              # 允许方案操作
+                    pivotTables=False,            # 允许数据透视表操作
+                )
                 logger.info("Excel 工作表保护已启用")
                 
                 wb.save(p)

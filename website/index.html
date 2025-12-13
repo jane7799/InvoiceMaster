@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能发票打印助手 - 高效发票管理与打印解决方案</title>
+    <meta name="description" content="智能发票打印助手是一款专业的发票批量打印和管理工具，支持PDF发票识别、多种排版模式、Excel导出等功能。">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563EB;
+            --primary-dark: #1D4ED8;
+            --primary-light: #3B82F6;
+            --accent: #7C3AED;
+            --bg-dark: #0F172A;
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --text-primary: #FFFFFF;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --gradient-primary: linear-gradient(135deg, #2563EB 0%, #7C3AED 100%);
+            --gradient-bg: linear-gradient(180deg, #1E3A8A 0%, #0F172A 100%);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--gradient-bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 导航栏 */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(20px);
+            background: rgba(15, 23, 42, 0.8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--gradient-primary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        /* 主区域 */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 6rem 4rem 4rem;
+            gap: 4rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .hero-content {
+            flex: 1;
+            max-width: 550px;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .hero-badge span {
+            color: #10B981;
+        }
+
+        .app-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--gradient-primary);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 20px 40px rgba(37, 99, 235, 0.3);
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(180deg, #FFFFFF 0%, rgba(255, 255, 255, 0.8) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-description {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 2.5rem;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--text-primary);
+            color: var(--bg-dark);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* 产品预览图 */
+        .hero-preview {
+            flex: 1.2;
+            position: relative;
+        }
+
+        .preview-container {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #1E293B;
+        }
+
+        .preview-header {
+            background: linear-gradient(180deg, #334155 0%, #1E293B 100%);
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .preview-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .preview-dot.red {
+            background: #EF4444;
+        }
+
+        .preview-dot.yellow {
+            background: #F59E0B;
+        }
+
+        .preview-dot.green {
+            background: #10B981;
+        }
+
+        .preview-image {
+            width: 100%;
+            display: block;
+        }
+
+        .preview-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .preview-overlay:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        .preview-overlay::after {
+            content: '';
+            border-style: solid;
+            border-width: 12px 0 12px 20px;
+            border-color: transparent transparent transparent #2563EB;
+            margin-left: 4px;
+        }
+
+        /* 功能特性区块 */
+        .features {
+            padding: 6rem 4rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 1.125rem;
+            margin-bottom: 4rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--gradient-primary);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* 下载区块 */
+        .download {
+            padding: 6rem 4rem;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .download-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .download-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .download-card {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .download-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-3px);
+        }
+
+        .download-card .os-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .download-card h4 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .download-card .version {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .download-card .btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* 下载下拉菜单 */
+        .download-dropdown {
+            position: relative;
+            width: 100%;
+        }
+
+        .download-select {
+            width: 100%;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            background: var(--text-primary);
+            color: var(--bg-dark);
+            border: none;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .download-select:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.2);
+        }
+
+        .download-select:focus {
+            outline: none;
+        }
+
+        .download-select option {
+            background: #1E293B;
+            color: white;
+            padding: 10px;
+        }
+
+        .dropdown-arrow {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: var(--bg-dark);
+        }
+
+        /* 页脚 */
+        footer {
+            padding: 3rem 4rem;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        footer p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        footer a {
+            color: var(--primary-light);
+            text-decoration: none;
+        }
+
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .hero {
+                flex-direction: column;
+                padding: 8rem 2rem 4rem;
+                text-align: center;
+            }
+
+            .hero-content {
+                max-width: 100%;
+            }
+
+            .hero-buttons {
+                justify-content: center;
+            }
+
+            h1 {
+                font-size: 2.5rem;
+            }
+
+            .app-icon {
+                margin: 0 auto 1.5rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .hero {
+                padding: 6rem 1.5rem 3rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .features,
+            .download {
+                padding: 4rem 1.5rem;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        /* 动画 */
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .hero-preview {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        /* 背景装饰 */
+        .bg-glow {
+            position: fixed;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.3;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .bg-glow-1 {
+            background: var(--primary);
+            top: -200px;
+            right: -200px;
+        }
+
+        .bg-glow-2 {
+            background: var(--accent);
+            bottom: -200px;
+            left: -200px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <nav>
+        <div class="logo">
+            <img src="logo.png" alt="Logo" style="width: 40px; height: 40px; border-radius: 10px;">
+            <span>智能发票打印助手</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="#features">功能特性</a></li>
+            <li><a href="#download">下载安装</a></li>
+            <li><a href="#docs">使用文档</a></li>
+            <li><a href="#about">关于我们</a></li>
+        </ul>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">
+                <span>●</span> 最新版本 V1.0.0 已发布
+            </div>
+            <div class="app-icon" style="padding: 12px;">
+                <img src="logo.png" alt="Logo"
+                    style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+            </div>
+            <h1>智能发票打印助手</h1>
+            <p class="hero-description">
+                专业的发票批量打印与管理工具，支持PDF发票智能识别、多种排版模式、Excel数据导出，让发票管理更高效、更智能。
+            </p>
+            <div class="hero-buttons">
+                <a href="#download" class="btn btn-primary">
+                    📥 立即下载
+                </a>
+                <a href="#docs" class="btn btn-secondary">
+                    📖 查看文档 ↗
+                </a>
+            </div>
+        </div>
+        <div class="hero-preview">
+            <div class="preview-container">
+                <div class="preview-header">
+                    <div class="preview-dot red"></div>
+                    <div class="preview-dot yellow"></div>
+                    <div class="preview-dot green"></div>
+                </div>
+                <!-- 模拟软件界面 -->
+                <div style="background: #F1F5F9; min-height: 380px; display: flex; font-size: 12px;">
+                    <!-- 左侧面板 -->
+                    <div style="width: 140px; background: #FFFFFF; padding: 12px; border-right: 1px solid #E2E8F0;">
+                        <div
+                            style="background: linear-gradient(135deg, #3B82F6, #2563EB); border-radius: 8px; padding: 15px; text-align: center; margin-bottom: 12px;">
+                            <div style="color: white; font-size: 18px;">📤</div>
+                            <div style="color: rgba(255,255,255,0.8); font-size: 9px; margin-top: 4px;">拖放文件上传</div>
+                        </div>
+                        <div style="font-size: 10px; color: #64748B; margin-bottom: 8px; font-weight: 600;">📋 发票清单
+                        </div>
+                        <div
+                            style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 8px; margin-bottom: 6px;">
+                            <div style="font-size: 9px; color: #334155; font-weight: 500;">发票001.pdf</div>
+                            <div style="font-size: 8px; color: #2563EB;">¥1,280.00</div>
+                        </div>
+                        <div
+                            style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 8px; margin-bottom: 6px;">
+                            <div style="font-size: 9px; color: #334155; font-weight: 500;">发票002.pdf</div>
+                            <div style="font-size: 8px; color: #2563EB;">¥890.50</div>
+                        </div>
+                        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 8px;">
+                            <div style="font-size: 9px; color: #334155; font-weight: 500;">发票003.pdf</div>
+                            <div style="font-size: 8px; color: #2563EB;">¥2,450.00</div>
+                        </div>
+                    </div>
+                    <!-- 中间预览区 -->
+                    <div
+                        style="flex: 1; background: #E2E8F0; padding: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div
+                            style="background: white; width: 85%; height: 260px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column;">
+                            <div style="flex: 1; display: flex; padding: 8px; gap: 8px;">
+                                <div
+                                    style="flex: 1; background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                                    <div style="text-align: center;">
+                                        <div style="color: #EF4444; font-size: 11px;">电子发票</div>
+                                        <div style="font-size: 9px; color: #64748B;">¥1,280.00</div>
+                                    </div>
+                                </div>
+                                <div
+                                    style="flex: 1; background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                                    <div style="text-align: center;">
+                                        <div style="color: #EF4444; font-size: 11px;">电子发票</div>
+                                        <div style="font-size: 9px; color: #64748B;">¥890.50</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="flex: 1; display: flex; padding: 0 8px 8px 8px; gap: 8px;">
+                                <div
+                                    style="flex: 1; background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                                    <div style="text-align: center;">
+                                        <div style="color: #EF4444; font-size: 11px;">电子发票</div>
+                                        <div style="font-size: 9px; color: #64748B;">¥2,450.00</div>
+                                    </div>
+                                </div>
+                                <div
+                                    style="flex: 1; background: #F1F5F9; border: 1px dashed #CBD5E1; border-radius: 4px;">
+                                </div>
+                            </div>
+                        </div>
+                        <div style="color: #64748B; font-size: 10px; margin-top: 10px;">- 1 -</div>
+                    </div>
+                    <!-- 右侧设置面板 -->
+                    <div style="width: 130px; background: #FFFFFF; padding: 12px; border-left: 1px solid #E2E8F0;">
+                        <div style="font-size: 11px; font-weight: 600; color: #1E293B; margin-bottom: 10px;">🖨️ 打印设置
+                        </div>
+                        <div
+                            style="background: #F8FAFC; border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; font-size: 9px; color: #64748B;">
+                            默认打印机/PDF</div>
+                        <div style="display: flex; gap: 4px; margin-bottom: 10px;">
+                            <div
+                                style="flex: 1; background: #F8FAFC; border-radius: 4px; padding: 4px; text-align: center; font-size: 9px; color: #64748B;">
+                                1 份</div>
+                            <div
+                                style="flex: 1; background: #F8FAFC; border-radius: 4px; padding: 4px; text-align: center; font-size: 9px; color: #64748B;">
+                                A4</div>
+                        </div>
+                        <div style="font-size: 9px; color: #64748B; margin-bottom: 6px;">排版模式:</div>
+                        <div style="display: flex; gap: 4px; margin-bottom: 12px;">
+                            <div
+                                style="width: 28px; height: 28px; background: #F1F5F9; border: 2px solid #2563EB; border-radius: 4px;">
+                            </div>
+                            <div
+                                style="width: 28px; height: 28px; background: #F1F5F9; border: 1px solid #E2E8F0; border-radius: 4px;">
+                            </div>
+                            <div
+                                style="width: 28px; height: 28px; background: #F1F5F9; border: 1px solid #E2E8F0; border-radius: 4px;">
+                            </div>
+                        </div>
+                        <div
+                            style="background: #F8FAFC; border-radius: 8px; padding: 10px; text-align: center; margin-bottom: 10px;">
+                            <div style="font-size: 9px; color: #64748B;">3 张发票</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #2563EB;">¥ 4,620.50</div>
+                        </div>
+                        <div
+                            style="background: linear-gradient(135deg, #3B82F6, #2563EB); border-radius: 6px; padding: 8px; text-align: center; color: white; font-size: 10px; font-weight: 600;">
+                            🖨️ 开始打印</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <h2 class="section-title">强大功能，高效办公</h2>
+        <p class="section-subtitle">专为财务和行政人员打造的发票管理工具</p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📄</div>
+                <h3>智能PDF识别</h3>
+                <p>自动识别PDF发票中的金额、日期、发票号码等关键信息，无需手动输入。</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🖨️</div>
+                <h3>多种排版模式</h3>
+                <p>支持1×1、1×2、2×2多种排版模式，节省纸张，横向纵向自由切换。</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Excel导出</h3>
+                <p>一键导出发票明细到Excel，自动检测重复发票，数据统计一目了然。</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <h3>OCR智能识别</h3>
+                <p>集成百度OCR接口，支持电子发票全字段智能识别和自动录入。</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">💻</div>
+                <h3>跨平台支持</h3>
+                <p>支持Windows、macOS、Linux(UOS)多平台运行，界面统一体验一致。</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <h3>现代化界面</h3>
+                <p>精心设计的UI界面，操作简单直观，支持拖拽上传，实时预览效果。</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="download" class="download">
+        <div class="download-container">
+            <h2 class="section-title">下载安装</h2>
+            <p class="section-subtitle">选择适合您系统的版本开始使用</p>
+
+            <div class="download-cards">
+                <div class="download-card">
+                    <div class="os-icon">
+                        <!-- Windows Logo SVG -->
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3 5.5L10 4.5V11.5H3V5.5Z" fill="#00ADEF" />
+                            <path d="M11 4.3L21 3V11.5H11V4.3Z" fill="#00ADEF" />
+                            <path d="M3 12.5H10V19.5L3 18.5V12.5Z" fill="#00ADEF" />
+                            <path d="M11 12.5H21V21L11 19.7V12.5Z" fill="#00ADEF" />
+                        </svg>
+                    </div>
+                    <h4>Windows</h4>
+                    <p class="version">适用于 Windows 7/10/11</p>
+                    <div class="download-dropdown">
+                        <select class="download-select" onchange="if(this.value) window.location.href=this.value">
+                            <option value="">选择版本下载</option>
+                            <option value="#win10">Windows 10/11 版</option>
+                            <option value="#win7">Windows 7 兼容版</option>
+                        </select>
+                        <span class="dropdown-arrow">▼</span>
+                    </div>
+                </div>
+                <div class="download-card">
+                    <div class="os-icon">
+                        <!-- Apple Logo SVG -->
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"
+                                fill="#FFFFFF" />
+                        </svg>
+                    </div>
+                    <h4>macOS</h4>
+                    <p class="version">适用于 macOS 11+</p>
+                    <div class="download-dropdown">
+                        <select class="download-select" onchange="if(this.value) window.location.href=this.value">
+                            <option value="">选择版本下载</option>
+                            <option value="#mac-intel">Intel 芯片版</option>
+                            <option value="#mac-arm">Apple Silicon 版</option>
+                        </select>
+                        <span class="dropdown-arrow">▼</span>
+                    </div>
+                </div>
+                <div class="download-card">
+                    <div class="os-icon">
+                        <!-- Linux/Tux Logo SVG -->
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M12 2C9.5 2 8 4.5 8 7C8 8.5 8.5 10 9 11C9.5 12 9.5 12.5 9 13.5C8.5 14.5 8 15 8 16C8 17.5 9 19 10 20C10.5 20.5 11 21 12 21C13 21 13.5 20.5 14 20C15 19 16 17.5 16 16C16 15 15.5 14.5 15 13.5C14.5 12.5 14.5 12 15 11C15.5 10 16 8.5 16 7C16 4.5 14.5 2 12 2Z"
+                                fill="#F0C674" />
+                            <ellipse cx="10" cy="7" rx="1" ry="1.2" fill="#2D2D2D" />
+                            <ellipse cx="14" cy="7" rx="1" ry="1.2" fill="#2D2D2D" />
+                            <path d="M10.5 9.5C10.5 9.5 11.5 10.5 12 10.5C12.5 10.5 13.5 9.5 13.5 9.5" stroke="#FF9500"
+                                stroke-width="0.8" stroke-linecap="round" />
+                            <path d="M6 16C5 17 4 18 4 19.5C4 21 5.5 22 7 22C8 22 9 21 9 20" stroke="#F0C674"
+                                stroke-width="2" stroke-linecap="round" />
+                            <path d="M18 16C19 17 20 18 20 19.5C20 21 18.5 22 17 22C16 22 15 21 15 20" stroke="#F0C674"
+                                stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                    </div>
+                    <h4>Linux / UOS</h4>
+                    <p class="version">适用于 Ubuntu/Debian/UOS</p>
+                    <a href="#linux" class="btn btn-primary">立即下载</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="about">
+        <p>© 2024 智能发票打印助手 | 由 <a href="#">金钓鲲的猫</a> 开发维护</p>
+        <p style="margin-top: 0.5rem;">如有问题请联系开发者获取支持</p>
+    </footer>
+</body>
+
+</html>
