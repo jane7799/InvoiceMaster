@@ -1,8 +1,7 @@
 name: Build Invoice App All Versions
 
+# 只手动触发打包，push 不会自动打包
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
