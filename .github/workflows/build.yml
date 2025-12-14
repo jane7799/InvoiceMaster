@@ -1,9 +1,7 @@
 name: Build Invoice App All Versions
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+  workflow_dispatch:  # 仅手动触发，避免每次推送都自动构建
 
 jobs:
   # ==================================================
