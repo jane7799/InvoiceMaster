@@ -157,7 +157,7 @@ class InvoiceHelper:
             if seat_types:
                 result["seat_type"] = seat_types[0].replace("\n", "").strip()
             
-            # 7. 提取乘客姓名（格式：3425011989****5014\n谭彬）
+            # 7. 提取乘客姓名（格式：1234561990****1234\n张三）
             # 先匹配带*的身份证号后面的姓名
             m_passenger = re.search(r'\d{10}\*{4}\d{4}\n([^\n\r\d]{2,4})', text)
             if m_passenger:
