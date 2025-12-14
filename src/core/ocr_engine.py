@@ -92,7 +92,7 @@ class InvoiceHelper:
                                     line_black += text
                                     is_left = span_x < mid_x
                                     
-                                    m_company = re.search(r'([^\n\r]{3,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会|基金|集团))', text)
+                                    m_company = re.search(r'([^\n\r]{3,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会|基金|集团|学校|学院|大学|医院|银行|支行|分行|商会|工会|联合会|事务所|工作室|分公司|门店|超市|酒店|宾馆|研究院|幼儿园|诊所|卫生院|药房|药店|保险|证券|信托|委员会|办公室|管理局|服务中心))', text)
                                     if m_company:
                                         if is_left and not buyer_name:
                                             buyer_name = m_company.group(1).strip()
@@ -199,7 +199,7 @@ class InvoiceHelper:
                     if m_payer:
                         result["buyer"] = m_payer.group(1).strip()
                     else:
-                        company_pattern = r'([^\n\r]{3,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会|基金|集团))'
+                        company_pattern = r'([^\n\r]{3,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会|基金|集团|学校|学院|大学|医院|银行|支行|分行|商会|工会|联合会|事务所|工作室|分公司|门店|超市|酒店|宾馆|研究院|幼儿园|诊所|卫生院|药房|药店|保险|证券|信托|委员会|办公室|管理局|服务中心))'
                         companies = re.findall(company_pattern, text)
                         seen = set()
                         unique_companies = []

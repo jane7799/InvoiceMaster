@@ -172,12 +172,12 @@ class InvoiceHelper:
                 result["buyer"] = m_buyer.group(1).strip()
             else:
                 # 方法2：统一社会信用代码前一行的单位名称
-                m_unit = re.search(r'([^\n\r]{5,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部))\n统一社会信用代码', text)
+                m_unit = re.search(r'([^\n\r]{5,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|学校|学院|大学|医院|银行|支行|分行|商会|工会|联合会|事务所|工作室|分公司|门店|超市|酒店|宾馆|研究院|幼儿园|诊所|卫生院|药房|药店|保险|证券|信托|委员会|办公室|管理局|服务中心))\n统一社会信用代码', text)
                 if m_unit:
                     result["buyer"] = m_unit.group(1).strip()
                 else:
                     # 方法3：匹配政府机关/企业名称格式
-                    units = re.findall(r'([^\n\r]{5,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会))', text)
+                    units = re.findall(r'([^\n\r]{5,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会|基金|集团|学校|学院|大学|医院|银行|支行|分行|商会|工会|联合会|事务所|工作室|分公司|门店|超市|酒店|宾馆|研究院|幼儿园|诊所|卫生院|药房|药店|保险|证券|信托|委员会|办公室|管理局|服务中心))', text)
                     # 过滤掉销售方相关的（国家铁路、12306等）
                     buyer_units = [u for u in units if '铁路' not in u and '12306' not in u and '祝您' not in u]
                     if buyer_units:
@@ -326,7 +326,7 @@ class InvoiceHelper:
             
             # 如果没有找到，从公司名称中识别
             if not result["buyer"] or not result["seller"]:
-                company_pattern = r'([^\n\r]{3,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会|基金|集团|代收))'
+                company_pattern = r'([^\n\r]{3,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会|基金|集团|代收|学校|学院|大学|医院|银行|支行|分行|商会|工会|联合会|事务所|工作室|分公司|门店|超市|酒店|宾馆|研究院|幼儿园|诊所|卫生院|药房|药店|保险|证券|信托|委员会|办公室|管理局|服务中心))'
                 companies = re.findall(company_pattern, text)
                 seen = set()
                 unique_companies = []
@@ -525,7 +525,7 @@ class InvoiceHelper:
                                     is_left = span_x < mid_x
                                     
                                     # 提取公司名
-                                    m_company = re.search(r'([^\n\r]{3,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会|基金|集团))', text)
+                                    m_company = re.search(r'([^\n\r]{3,50}(?:公司|单位|中心|联络处|处|局|厅|院|所|站|部|协会|基金|集团|学校|学院|大学|医院|银行|支行|分行|商会|工会|联合会|事务所|工作室|分公司|门店|超市|酒店|宾馆|研究院|幼儿园|诊所|卫生院|药房|药店|保险|证券|信托|委员会|办公室|管理局|服务中心))', text)
                                     if m_company:
                                         if is_left and not buyer_name:
                                             buyer_name = m_company.group(1).strip()
