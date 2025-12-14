@@ -10,7 +10,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.core.database import InvoiceDatabase
 
-
 class TestInvoiceDatabase(unittest.TestCase):
     """InvoiceDatabase 测试用例"""
     
@@ -43,7 +42,7 @@ class TestInvoiceDatabase(unittest.TestCase):
         self.assertGreater(invoice_id, 0)
         
         # 获取
-        invoice = self.db.get_invoice(invoice_id)
+        invoice = self.db.get_invoice_by_path('/test/invoice1.pdf')
         self.assertIsNotNone(invoice)
         self.assertEqual(invoice['file_name'], 'invoice1.pdf')
         self.assertAlmostEqual(invoice['amount'], 1000.50)
@@ -64,7 +63,7 @@ class TestInvoiceDatabase(unittest.TestCase):
         
         self.assertEqual(invoice_id, updated_id)
         
-        invoice = self.db.get_invoice(invoice_id)
+        invoice = self.db.get_invoice_by_path('/test/invoice2.pdf')
         self.assertAlmostEqual(invoice['amount'], 800.00)
     
     def test_search_invoices(self):
@@ -74,62 +73,59 @@ class TestInvoiceDatabase(unittest.TestCase):
             'file_path': '/test/a.pdf',
             'file_name': 'a.pdf',
             'seller': '北京科技公司',
+            'date': '2025-01-01',
             'amount': 1000
         })
         self.db.save_invoice({
             'file_path': '/test/b.pdf',
             'file_name': 'b.pdf',
             'seller': '上海贸易公司',
+            'date': '2025-02-01',
             'amount': 2000
         })
         
-        # 按关键词搜索
-        results = self.db.search_invoices(keyword='北京')
+        # 按卖方搜索
+        results = self.db.search_invoices(seller='北京')
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['seller_name'], '北京科技公司')
+        self.assertEqual(results[0]['seller'], '北京科技公司')
         
         # 按金额范围搜索
-        results = self.db.search_invoices(amount_min=1500)
+        results = self.db.search_invoices(min_amount=1500)
         self.assertEqual(len(results), 1)
         self.assertAlmostEqual(results[0]['amount'], 2000)
     
     def test_delete_invoice(self):
-        """测试删除发票（软删除）"""
-        invoice_id = self.db.save_invoice({
+        """测试删除发票"""
+        self.db.save_invoice({
             'file_path': '/test/delete.pdf',
             'file_name': 'delete.pdf'
         })
         
-        # 软删除
-        result = self.db.delete_invoice(invoice_id, soft=True)
+        # 删除
+        result = self.db.delete_invoice('/test/delete.pdf')
         self.assertTrue(result)
         
-        # 软删除后无法查询
-        invoice = self.db.get_invoice(invoice_id)
+        # 删除后无法查询
+        invoice = self.db.get_invoice_by_path('/test/delete.pdf')
         self.assertIsNone(invoice)
     
     def test_statistics(self):
         """测试统计功能"""
-        self.db.save_invoice({'file_path': '/test/s1.pdf', 'file_name': 's1.pdf', 'amount': 100})
-        self.db.save_invoice({'file_path': '/test/s2.pdf', 'file_name': 's2.pdf', 'amount': 200})
-        self.db.save_invoice({'file_path': '/test/s3.pdf', 'file_name': 's3.pdf', 'amount': 300})
+        self.db.save_invoice({'file_path': '/test/s1.pdf', 'file_name': 's1.pdf', 'amount': 100, 'invoice_type': 'A', 'date': '2025-01-01'})
+        self.db.save_invoice({'file_path': '/test/s2.pdf', 'file_name': 's2.pdf', 'amount': 200, 'invoice_type': 'A', 'date': '2025-01-05'})
+        self.db.save_invoice({'file_path': '/test/s3.pdf', 'file_name': 's3.pdf', 'amount': 300, 'invoice_type': 'B', 'date': '2025-02-01'})
         
         stats = self.db.get_statistics()
         
         self.assertEqual(stats['total_count'], 3)
         self.assertAlmostEqual(stats['total_amount'], 600)
-        self.assertAlmostEqual(stats['avg_amount'], 200)
-        self.assertAlmostEqual(stats['min_amount'], 100)
-        self.assertAlmostEqual(stats['max_amount'], 300)
-    
-    def test_export_record(self):
-        """测试导出记录"""
-        self.db.save_export_record('/test/export.xlsx', 10, 5000.00)
         
-        exports = self.db.get_recent_exports(limit=5)
-        self.assertEqual(len(exports), 1)
-        self.assertEqual(exports[0]['invoice_count'], 10)
-
+        # 验证按月统计
+        by_month = stats['by_month']
+        # 应该有 2025-01 和 2025-02
+        months = [m['month'] for m in by_month]
+        self.assertIn('2025-01', months)
+        self.assertIn('2025-02', months)
 
 if __name__ == '__main__':
     unittest.main()

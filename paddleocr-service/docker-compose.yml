@@ -1,15 +1,37 @@
+version: '3.8'
+
 services:
   paddleocr:
     build: .
     container_name: paddleocr-api
+
+    # 端口映射：外部 8891 -> 容器内部 8891
     ports:
       - "8891:8891"
+
     environment:
       - TZ=Asia/Shanghai
-    restart: unless-stopped
+      - DISABLE_MODEL_SOURCE_CHECK=True
+
+    # 重启策略：NAS重启后自动启动
+    restart: always
+
+    # 挂载目录，缓存模型（重启无需重新下载）
+    volumes:
+      - ./paddlehub_data:/root/.paddlehub
+      - ./paddle_models:/root/.paddleocr
+      - ./paddlex_models:/root/.paddlex
+
+    # 健康检查
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8891/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 4G
         reservations:
           memory: 1G

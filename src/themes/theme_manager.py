@@ -1,11 +1,5 @@
-"""
-主题管理模块
-提供 Light/Dark 主题样式
-"""
 
 class ThemeManager:
-    """主题管理器"""
-    
     SCROLLBAR_CSS = """
         QScrollBar:vertical {
             border: none;
@@ -319,86 +313,15 @@ class ThemeManager:
         border: 2px solid #475569;
         border-radius: 16px;
     }
-    QToolButton#LayoutCard:hover {
-        border-color: #60A5FA;
-        background-color: #334155;
-    }
     QToolButton#LayoutCard:checked {
         border-color: #3B82F6;
         background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
             stop:0 #1E40AF, stop:1 #1E3A8A);
     }
-    QFrame#PreviewControlBar {
-        background-color: #1E293B;
-        border-top: 1px solid #334155;
-    }
-    QLabel#PageLabel {
-        color: #94A3B8;
-    }
-    QLabel#Title {
-        color: #F1F5F9;
-    }
-    QGroupBox {
-        border: none;
-        font-weight: 600;
-        margin-top: 12px;
-        color: #E2E8F0;
-    }
-    QDialog {
-        background-color: #1E293B;
-        color: #E2E8F0;
-    }
-    QMessageBox {
-        background-color: #1E293B;
-    }
-    QMessageBox QLabel {
-        color: #E2E8F0;
-    }
-    QInputDialog {
-        background-color: #1E293B;
-    }
-    QProgressBar {
-        border: 1px solid #475569;
-        border-radius: 8px;
-        background-color: #334155;
-        text-align: center;
-        color: white;
-    }
-    QProgressBar::chunk {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #3B82F6, stop:1 #60A5FA);
-        border-radius: 7px;
-    }
-    QToolTip {
-        background-color: #334155;
-        color: #F1F5F9;
-        border: 1px solid #475569;
-        border-radius: 6px;
-        padding: 6px 10px;
-    }
-    QScrollBar:vertical {
-        background: #1E293B;
-    }
-    QScrollBar::handle:vertical {
-        background: #475569;
-    }
-    QScrollBar::handle:vertical:hover {
-        background: #64748B;
-    }
-    QScrollBar:horizontal {
-        background: #1E293B;
-    }
-    QScrollBar::handle:horizontal {
-        background: #475569;
-    }
-    QScrollBar::handle:horizontal:hover {
-        background: #64748B;
-    }
     """ + SCROLLBAR_CSS
 
     @staticmethod
     def apply(app, mode="Light"):
-        """应用主题到应用程序"""
         if mode == "Auto":
             mode = "Light"
         if mode == "Dark":

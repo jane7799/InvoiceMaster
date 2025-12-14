@@ -3,12 +3,12 @@
 
 a = Analysis(
     ['InvoiceMaster.py'],
-    pathex=[],
+    pathex=['src'],
     binaries=[],
     datas=[
         ('qr1.jpg', '.'), 
         ('qr2.jpg', '.'), 
-        ('license_manager.py', '.'),
+        ('src/core/license_manager.py', 'src/core'),
         ('icon_1x1_l.png', '.'),
         ('icon_1x1_p.png', '.'),
         ('icon_1x2_l.png', '.'),
@@ -16,7 +16,14 @@ a = Analysis(
         ('icon_2x2_l.png', '.'),
         ('icon_2x2_p.png', '.'),
     ],
-    hiddenimports=[],
+    hiddenimports=[
+        'src.core.database', 'src.core.workers', 'src.core.pdf_engine', 'src.core.print_engine',
+        'src.core.invoice_helper', 'src.core.license_manager', 
+        'src.utils.log_manager', 'src.utils.icons', 'src.utils.config', 'src.utils.utils',
+        'src.themes.theme_manager',
+        'src.ui.main_window', 'src.ui.dialogs', 'src.ui.settings_dialog', 
+        'src.ui.statistics_dialog', 'src.ui.widgets', 'src.ui.preview'
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

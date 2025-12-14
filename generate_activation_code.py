@@ -42,7 +42,7 @@ def generate_activation_code(machine_code):
 
 def main():
     print("=" * 60)
-    print("智能发票打印助手 - 激活码生成工具")
+    print("智能发票管理助手 - 激活码生成工具")
     print("=" * 60)
     print()
     

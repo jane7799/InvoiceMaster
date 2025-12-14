@@ -1,0 +1,999 @@
+
+import os
+import sys
+import gc
+import logging
+import platform
+import fitz  # PyMuPDF
+import pandas as pd
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                           QLabel, QPushButton, QListWidget, QListWidgetItem, 
+                           QStackedWidget, QComboBox, QCheckBox, QRadioButton,
+                           QButtonGroup, QToolButton, QFileDialog, QMessageBox,
+                           QInputDialog, QSpinBox, QApplication, QAbstractItemView,
+                           QMenu)
+from PyQt6.QtCore import Qt, QSize, QTimer
+from PyQt6.QtGui import QIcon, QImage, QAction, QTransform
+from PyQt6.QtPrintSupport import QPrinter, QPrinterInfo, QPrintDialog
+from PyQt6.QtCore import QSettings
+
+from src.core.invoice_helper import InvoiceHelper
+from src.core.pdf_engine import PDFEngine
+from src.core.workers import OcrWorker, PdfWorker, PrintWorker
+from src.core.license_manager import LicenseManager
+from src.core.database import get_db
+from src.themes.theme_manager import ThemeManager
+from src.utils.log_manager import LogManager
+from src.utils.icons import Icons
+from src.utils.constants import APP_NAME, APP_VERSION, APP_AUTHOR_CN
+from src.utils.utils import resource_path
+from src.utils.config import UI_CONFIG
+
+from src.ui.dialogs import ProgressDialog, AboutDialog, ActivationDialog
+from src.ui.settings_dialog import SettingsDlg
+from src.ui.statistics_dialog import StatisticsDialog
+from src.ui.widgets import Card, DragArea, InvoiceItemWidget
+from src.ui.preview import AdvancedPreviewArea, SingleDocViewer
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
+        self.resize(1350, 850); self.data = []; self.theme_c = "#555"
+        self.temp_files = [] 
+        self.preview_timer = QTimer(); self.preview_timer.setSingleShot(True); self.preview_timer.timeout.connect(self.generate_realtime_preview)
+        self.current_printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        self.right_panel = None; self.settings_card = None
+        self.license_manager = LicenseManager()
+        
+        # 异步工作线程引用
+        self.ocr_worker = None
+        self.pdf_worker = None
+        self.print_worker = None
+        self.progress_dialog = None
+        
+        self.init_ui()
+        ThemeManager.apply(QApplication.instance())
+        self.change_theme("Light")
+
+    def closeEvent(self, event):
+        for f in self.temp_files:
+            try: os.remove(f)
+            except: pass
+        super().closeEvent(event)
+
+    def init_ui(self):
+        main = QWidget(); self.setCentralWidget(main)
+        layout = QHBoxLayout(main); layout.setContentsMargins(15,15,15,15); layout.setSpacing(15)
+
+        # LEFT
+        left = QWidget(); left.setFixedWidth(280); lv = QVBoxLayout(left); lv.setContentsMargins(0,0,0,0); lv.setSpacing(12)
+        
+        # 拖放区域
+        self.drag = DragArea(); self.drag.dropped.connect(self.add_files)
+        lv.addWidget(self.drag)
+        
+        # 发票清单标题
+        list_title = QLabel("📋 发票清单 (双击修正金额)")
+        list_title.setStyleSheet("color: #64748B; font-size: 12px; font-weight: 600; margin-top: 8px;")
+        lv.addWidget(list_title)
+        
+        self.list = QListWidget(); self.list.setIconSize(QSize(40,50)); self.list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu); self.list.customContextMenuRequested.connect(self.ctx_menu)
+        self.list.itemDoubleClicked.connect(self.edit_item); self.list.itemClicked.connect(self.show_single_doc)
+        
+        tb = QHBoxLayout(); tb.setSpacing(10)
+        self.btn_set = QPushButton("设置")
+        self.btn_set.setMinimumHeight(44)
+        # 平台自适应按钮样式
+        if UI_CONFIG.get("use_gradients", True):
+            btn_bg = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 #2563EB);"
+            btn_hover = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2563EB, stop:1 #1D4ED8);"
+        else:
+            btn_bg = "background: #2563EB;"
+            btn_hover = "background: #1D4ED8;"
+        self.btn_set.setStyleSheet(f"""
+            QPushButton {{
+                {btn_bg}
+                border: none;
+                color: white;
+                font-weight: 600;
+                font-size: 14px;
+                border-radius: 8px;
+                padding: 10px 20px;
+            }}
+            QPushButton:hover {{
+                {btn_hover}
+            }}
+        """)
+        self.btn_set.clicked.connect(lambda: SettingsDlg(self).exec())
+        
+        self.btn_del = QPushButton("清空")
+        self.btn_del.setMinimumHeight(44)
+        if UI_CONFIG.get("use_gradients", True):
+            del_bg = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60A5FA, stop:1 #3B82F6);"
+            del_hover = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 #2563EB);"
+        else:
+            del_bg = "background: #3B82F6;"
+            del_hover = "background: #2563EB;"
+        self.btn_del.setStyleSheet(f"""
+            QPushButton {{
+                {del_bg}
+                border: none;
+                color: white;
+                font-weight: 600;
+                font-size: 14px;
+                border-radius: 8px;
+                padding: 10px 20px;
+            }}
+            QPushButton:hover {{
+                {del_hover}
+            }}
+        """)
+        self.btn_del.clicked.connect(self.clear)
+        
+        # 统计按钮
+        self.btn_stats = QPushButton("📊 统计")
+        self.btn_stats.setMinimumHeight(44)
+        self.btn_stats.setStyleSheet(f"""
+            QPushButton {{
+                background: #10B981;
+                border: none;
+                color: white;
+                font-weight: 600;
+                font-size: 14px;
+                border-radius: 8px;
+                padding: 10px 20px;
+            }}
+            QPushButton:hover {{
+                background: #059669;
+            }}
+        """)
+        self.btn_stats.clicked.connect(lambda: StatisticsDialog(self).exec())
+        
+        tb.addWidget(self.btn_set); tb.addWidget(self.btn_stats); tb.addStretch(); tb.addWidget(self.btn_del)
+        
+        lv.addWidget(self.list); lv.addLayout(tb)
+        footer_lbl = QLabel(APP_AUTHOR_CN, alignment=Qt.AlignmentFlag.AlignCenter); footer_lbl.setStyleSheet("color:#999; font-size:11px; margin-top: 10px;")
+        lv.addWidget(footer_lbl)
+
+        # MIDDLE
+        mid = QWidget(); mv = QVBoxLayout(mid); mv.setContentsMargins(0,0,0,0); mv.setSpacing(0)
+        self.stack = QStackedWidget()
+        self.word_preview = AdvancedPreviewArea() 
+        self.single_viewer = SingleDocViewer() 
+        self.stack.addWidget(self.word_preview); self.stack.addWidget(self.single_viewer)
+        mv.addWidget(self.stack)
+
+        # RIGHT
+        self.right_panel = QWidget(); self.right_panel.setFixedWidth(340)
+        rv = QVBoxLayout(self.right_panel); rv.setContentsMargins(0,0,0,0)
+        self.settings_card = Card() 
+        self.settings_layout = QVBoxLayout(self.settings_card)
+        self.settings_layout.setSpacing(15); self.settings_layout.setContentsMargins(20,20,20,20)
+        
+        # 打印设置标题
+        print_title = QLabel("🖨️ 打印设置")
+        print_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #1E293B; margin-bottom: 5px;")
+        self.settings_layout.addWidget(print_title)
+        
+        r_pr = QHBoxLayout(); self.cb_pr = QComboBox(); self.cb_pr.addItem("🖥️ 默认打印机/PDF")
+        if platform.system() in ["Windows", "Linux"]: 
+            for p in QPrinterInfo.availablePrinterNames(): self.cb_pr.addItem(f"🖨️ {p}")
+        self.cb_pr.currentIndexChanged.connect(self.on_printer_changed)
+        
+        self.btn_prop = QPushButton(); self.btn_prop.setObjectName("PropBtn"); self.btn_prop.setFixedSize(32, 32)
+        self.btn_prop.setIcon(Icons.get("settings", "#64748B")); self.btn_prop.setIconSize(QSize(18, 18))
+        self.btn_prop.setToolTip("打印机属性")
+        self.btn_prop.clicked.connect(self.open_printer_props)
+        self.btn_prop.setEnabled(False)
+        r_pr.addWidget(self.cb_pr, 1); r_pr.addWidget(self.btn_prop); self.settings_layout.addLayout(r_pr)
+
+        r_cp = QHBoxLayout(); self.sp_cpy = QSpinBox(); self.sp_cpy.setRange(1,99); self.sp_cpy.setSuffix(" 份")
+        self.cb_pap = QComboBox(); self.cb_pap.addItems(["A4", "A5", "B5"]); self.cb_pap.currentTextChanged.connect(self.show_layout_preview)
+        r_cp.addWidget(QLabel("份数:")); r_cp.addWidget(self.sp_cpy); r_cp.addWidget(QLabel("纸张:")); r_cp.addWidget(self.cb_pap); self.settings_layout.addLayout(r_cp)
+        
+        self.settings_layout.addWidget(QLabel("排版模式:"))
+        rm = QHBoxLayout(); 
+        self.b1 = QToolButton(); self.b1.setObjectName("LayoutCard"); self.b1.setFixedSize(85, 85); self.b1.setIconSize(QSize(72,72))
+        self.b2 = QToolButton(); self.b2.setObjectName("LayoutCard"); self.b2.setFixedSize(85, 85); self.b2.setIconSize(QSize(72,72))
+        self.b4 = QToolButton(); self.b4.setObjectName("LayoutCard"); self.b4.setFixedSize(85, 85); self.b4.setIconSize(QSize(72,72))
+        self.b1.setCheckable(True); self.b2.setCheckable(True); self.b4.setCheckable(True)
+        grp=QButtonGroup(self); grp.addButton(self.b1); grp.addButton(self.b2); grp.addButton(self.b4); self.b1.setChecked(True)
+        grp.buttonClicked.connect(self.show_layout_preview)
+        rm.addWidget(self.b1); rm.addWidget(self.b2); rm.addWidget(self.b4); self.settings_layout.addLayout(rm)
+
+        r_dir = QHBoxLayout()
+        self.rd_p = QRadioButton("纵向"); self.rd_l = QRadioButton("横向"); self.rd_l.setChecked(True)
+        self.rd_p.toggled.connect(self.update_layout_icons); self.rd_l.toggled.connect(self.update_layout_icons)
+        r_dir.addWidget(QLabel("方向:")); r_dir.addWidget(self.rd_p); r_dir.addWidget(self.rd_l); r_dir.addStretch()
+        self.settings_layout.addLayout(r_dir)
+        
+        r_opt = QHBoxLayout()
+        self.chk_cut = QCheckBox("显示裁剪辅助线"); self.chk_cut.setChecked(True); self.chk_cut.stateChanged.connect(self.show_layout_preview)
+        self.chk_rotate = QCheckBox("强力打印纠偏"); self.chk_rotate.setToolTip("强制旋转90度打印，解决部分打印机方向错误问题")
+        r_opt.addWidget(self.chk_cut); r_opt.addSpacing(20); r_opt.addWidget(self.chk_rotate); r_opt.addStretch()
+        self.settings_layout.addLayout(r_opt)
+        
+        rv.addWidget(self.settings_card)
+
+        c3 = Card(); l3 = QVBoxLayout(c3); l3.setSpacing(10); l3.setContentsMargins(20,20,20,20)
+        self.lbl_inf = QLabel("0 张发票"); self.lbl_tot = QLabel("¥ 0.00", styleSheet="font-size:22px; font-weight:bold; color:#007AFF")
+        l3.addWidget(self.lbl_inf); l3.addWidget(self.lbl_tot)
+        self.btn_xls = QPushButton(" 导出 Excel"); self.btn_xls.setIcon(Icons.get("excel")); self.btn_xls.clicked.connect(self.xls); l3.addWidget(self.btn_xls); rv.addWidget(c3)
+
+        self.btn_go = QPushButton(" 开始打印"); self.btn_go.setObjectName("PrimaryBtn"); self.btn_go.setIcon(Icons.get("print", "white")); self.btn_go.setMinimumHeight(50)
+        self.btn_go.clicked.connect(self.run); rv.addWidget(self.btn_go)
+        
+        btn_about = QPushButton(" 关于本软件"); btn_about.clicked.connect(lambda: AboutDialog(self).exec())
+        rv.addWidget(btn_about); rv.addStretch()
+
+        layout.addWidget(left); layout.addWidget(mid, 1); layout.addWidget(self.right_panel)
+        self.drag.upd("#555")
+
+    def change_theme(self, mode):
+        self.theme_c = ThemeManager.apply(QApplication.instance(), mode)
+        self.drag.upd(self.theme_c)
+        self.btn_set.setIcon(Icons.get("settings", self.theme_c))
+        self.btn_del.setIcon(Icons.get("trash", "#d73a49")) 
+        self.btn_xls.setIcon(Icons.get("excel", self.theme_c))
+        self.btn_go.setIcon(Icons.get("print", "white"))
+        self.update_layout_icons() 
+
+    def update_layout_icons(self):
+        if not hasattr(self, 'rd_l') or not self.rd_l: return
+        try: is_l = self.rd_l.isChecked()
+        except RuntimeError: return 
+        
+        icon_1 = "icon_1x1_l.png" if is_l else "icon_1x1_p.png"
+        if os.path.exists(resource_path(icon_1)): self.b1.setIcon(QIcon(resource_path(icon_1)))
+        else: self.b1.setIcon(Icons.get("layout_1x1_card", self.theme_c))
+        icon_2 = "icon_1x2_l.png" if is_l else "icon_1x2_p.png"
+        if os.path.exists(resource_path(icon_2)): self.b2.setIcon(QIcon(resource_path(icon_2)))
+        else: self.b2.setIcon(Icons.get("layout_1x2_card_h" if is_l else "layout_1x2_card_v", self.theme_c))
+        icon_4 = "icon_2x2_l.png" if is_l else "icon_2x2_p.png"
+        if os.path.exists(resource_path(icon_4)): self.b4.setIcon(QIcon(resource_path(icon_4)))
+        else: self.b4.setIcon(Icons.get("layout_2x2_card", self.theme_c))
+        btn_size = QSize(90, 65) if is_l else QSize(65, 90)
+        icon_size = QSize(86, 61) if is_l else QSize(61, 86)
+        for btn in [self.b1, self.b2, self.b4]:
+            btn.setFixedSize(btn_size)
+            btn.setIconSize(icon_size)
+        self.show_layout_preview()
+        
+        # 自动清理可能产生的错误空数据（之前版本的bug）
+        get_db().delete_invoice("")
+
+    def _save_d_to_db(self, d):
+        """辅助方法：将UI数据字典转换为数据库格式并保存"""
+        # 基础数据来自 ext (OCR/解析结果)
+        info = d.get("ext", {}).copy()
+        
+        # 强制覆盖核心字段（以UI显示的为准，支持用户手动修改）
+        info["file_path"] = d.get("p")
+        info["file_name"] = d.get("n")
+        info["amount"] = d.get("a", 0.0)
+        info["date"] = d.get("d", "")
+        
+        # 保存到数据库
+        get_db().save_invoice(info)
+
+    def delete_specific_item(self, item):
+        row = self.list.row(item); self.list.takeItem(row); 
+        d = self.data.pop(row)
+        get_db().delete_invoice(d['p'])
+        self.calc(); self.show_layout_preview()
+    
+    def show_single_doc(self, item):
+        row = self.list.row(item)
+        if row < len(self.data):
+            f = self.data[row]['p']
+            o = "H" if self.rd_l.isChecked() else "V"
+            paper = self.cb_pap.currentText().replace("纸张: ", "") if "纸张: " in self.cb_pap.currentText() else self.cb_pap.currentText()
+            doc = PDFEngine.merge([f], "1x1", paper, o, self.chk_cut.isChecked(), out_path=None)
+            if doc:
+                # 使用平台自适应的渲染分辨率
+                scale = UI_CONFIG.get("preview_render_scale", 4.0)
+                pix = doc[0].get_pixmap(matrix=fitz.Matrix(scale, scale))
+                img = QImage.fromData(pix.tobytes("ppm"))
+                
+                # [V3.4.0] 单张预览也需要反向旋转修复 (与排版预览逻辑保持一致)
+                if o == "H":
+                    transform = QTransform()
+                    transform.rotate(-90) # 修正: 逆时针90度
+                    img = img.transformed(transform)
+                    
+                self.single_viewer.set_image(img) 
+                doc.close() 
+            self.stack.setCurrentIndex(1)
+
+    def show_layout_preview(self): self.stack.setCurrentIndex(0); self.trigger_refresh()
+    def edit_item(self, item):
+        row = self.list.row(item)
+        old_val = self.data[row].get('a', 0)
+        val, ok = QInputDialog.getDouble(self, "修正金额", "请输入正确金额:", old_val, 0.00, 1000000, 2)
+        if ok:
+            self.data[row]['a'] = val
+            self.data[row]['manually_edited'] = True
+            self._save_d_to_db(self.data[row])
+            widget = self.list.itemWidget(item)
+            if widget:
+                widget.update_display(self.data[row])
+            self.calc()
+    
+    def on_printer_changed(self, idx):
+        if idx == 0:
+            self.btn_prop.setEnabled(False)
+            self.btn_go.setText(" 预览 / 生成PDF")
+        else:
+            self.btn_prop.setEnabled(True)
+            p_name = self.cb_pr.currentText().replace("🖨️ ", "")
+            self.current_printer = QPrinter(QPrinterInfo.printerInfo(p_name), QPrinter.PrinterMode.HighResolution)
+            self.btn_go.setText(f" 打印到: {p_name[:8]}...")
+
+    def open_printer_props(self):
+        dlg = QPrintDialog(self.current_printer, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted: pass 
+
+    def trigger_refresh(self): self.preview_timer.start(200)
+    def generate_realtime_preview(self):
+        m="1x1"; m="1x2" if self.b2.isChecked() else m; m="2x2" if self.b4.isChecked() else m
+        o="H" if self.rd_l.isChecked() else "V"; 
+        
+        rotate_preview = (o == "H")
+
+        if hasattr(self, 'current_doc') and self.current_doc: self.current_doc.close(); self.current_doc = None
+        gc.collect()
+        paper = self.cb_pap.currentText().replace("纸张: ", "") if "纸张: " in self.cb_pap.currentText() else self.cb_pap.currentText()
+        self.current_doc = PDFEngine.merge([x['p'] for x in self.data], m, paper, o, self.chk_cut.isChecked(), out_path=None)
+        page_imgs = []
+        if self.current_doc:
+            for page in self.current_doc: 
+                # 使用平台自适应的渲染分辨率
+                scale = UI_CONFIG.get("preview_render_scale", 4.0)
+                pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale)); img = QImage.fromData(pix.tobytes("ppm"))
+                if rotate_preview:
+                    transform = QTransform()
+                    transform.rotate(-90) 
+                    img = img.transformed(transform)
+                page_imgs.append(img)
+        self.word_preview.show_pages(page_imgs)
+
+    def add_files(self, fs):
+        """添加文件并异步执行 OCR 识别"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"开始添加 {len(fs)} 个文件")
+        
+        try:
+            s = QSettings("MySoft", "InvoiceMaster")
+            ak, sk = s.value("ak"), s.value("sk")
+            
+            # 先同步添加所有文件到列表（快速响应用户）
+            files_with_index = []
+            start_idx = len(self.data)
+            
+            added_count = 0
+            
+            for i, f in enumerate(fs):
+                try:
+                    # [V3.5] 文件名预过滤：直接跳过明确的非发票文件
+                    # 包含：清单、入住凭证、行程报销单、结算单
+                    logger.info(f"添加文件: {os.path.basename(f)}")
+                    # [V3.5] 移除文件名过滤，允许所有文件导入，但在统计时排除
+                    basename = os.path.basename(f)
+                    # ignore_keywords = ["清单", "入住凭证", "行程报销单", "结算单"]
+                    # if any(k in basename for k in ignore_keywords):
+                    #     logger.info(f"🚫 根据文件名跳过: {basename}")
+                    #     continue
+
+                    logger.info(f"添加文件: {basename}")
+                    d = {"p": f, "n": basename, "d": "", "a": 0.0, "ext": {}, "_pending_ocr": True}
+                    
+                    # 本地解析完整发票信息
+                    # 本地解析完整发票信息
+                    if f.lower().endswith(".pdf"):
+                        local_result = InvoiceHelper.parse_invoice_local(f)
+                        
+                        # [V3.5] 特殊处理：如果是清单或非发票凭证，直接认可，跳过OCR
+                        inv_type = local_result.get("invoice_type", "") if local_result else ""
+                        is_special_doc = "清单" in inv_type or "非发票" in inv_type
+                        
+                        if is_special_doc:
+                             d["a"] = local_result.get("amount", 0)
+                             d["d"] = local_result.get("date", "")
+                             d["ext"] = local_result
+                             d["_pending_ocr"] = False # 明确标记不需OCR
+                             logger.info(f"✅ 识别为特殊文档(不计入统计): {os.path.basename(f)} - {inv_type}")
+                             
+                        # 只有当数据完整时才跳过OCR
+                        elif InvoiceHelper._is_result_complete(local_result):
+                            d["a"] = local_result["amount"]
+                            d["d"] = local_result.get("date", "")
+                            d["ext"] = local_result
+                            d["_pending_ocr"] = False  # 数据完整，不需要OCR
+                            logger.info(f"✅ 本地解析完整: {os.path.basename(f)}, 金额: {d['a']}")
+                        elif local_result.get("amount", 0) > 0:
+                            # 有金额但不完整，需要继续OCR
+                            d["a"] = local_result["amount"]
+                            d["d"] = local_result.get("date", "")
+                            d["ext"] = local_result
+                            d["_pending_ocr"] = True  # 数据不完整，需要OCR补充
+                            logger.info(f"⚠️ 本地解析不完整: {os.path.basename(f)}, 金额: {d['a']}，将使用OCR")
+                        else:
+                            logger.info(f"⚠️ 本地解析失败: {os.path.basename(f)}，将使用OCR")
+                    
+                    item = QListWidgetItem(self.list)
+                    item.setSizeHint(QSize(250, 60))
+                    widget = InvoiceItemWidget(d, item, self.delete_specific_item)
+                    self.list.setItemWidget(item, widget)
+                    
+                    
+                    # [V3.5] 财务严谨性过滤：虽然导入清单/凭证，但不计入统计
+                    # 之前的版本是直接跳过(continue)，现在改为导入但标记类型
+                    skipped_types = ["发票清单", "非发票凭证"]
+                    base_invoicetype = d.get("invoice_type", "")
+                    if base_invoicetype in skipped_types or "非发票" in base_invoicetype:
+                         # 可以在这里做一些额外的UI标记，目前仅依靠 calc() 排除统计
+                         pass
+                    
+                    self.data.append(d)
+                    widget.update_display(d)
+                    self._save_d_to_db(d)
+                    added_count += 1
+                    
+                    # 记录需要 OCR 的文件（只有 _pending_ocr=True 的才需要）
+                    # 如果有百度API Key 或 私有OCR地址，就添加到待识别列表
+                    private_ocr_url = QSettings("MySoft", "InvoiceMaster").value("private_ocr_url", "")
+                    if (ak or private_ocr_url) and d.get("_pending_ocr", True):
+                        files_with_index.append((start_idx + i, f))
+                
+                except Exception as inner_e:
+                    logger.error(f"处理单个文件失败 {f}: {str(inner_e)}", exc_info=True)
+                    continue
+
+            self.calc()
+            self.show_layout_preview()
+            QApplication.processEvents()
+            
+            # 如果有需要识别的文件，启动异步 OCR
+            if files_with_index:
+                self._start_async_ocr(files_with_index, ak, sk)
+            else:
+                logger.info(f"文件添加完成，共 {len(self.data)} 个发票（无 OCR）")
+                
+        except Exception as e:
+            logger.error(f"添加文件全局错误: {str(e)}", exc_info=True)
+            QMessageBox.critical(self, "导入失败", f"添加文件时发生错误:\n{str(e)}")
+    
+    def _start_async_ocr(self, files_with_index, ak, sk):
+        """启动异步 OCR 处理"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"启动异步 OCR，共 {len(files_with_index)} 个文件")
+        
+        # 创建进度对话框
+        self.progress_dialog = ProgressDialog(self, "OCR 识别中", can_cancel=True)
+        
+        # 创建 OCR 工作线程
+        self.ocr_worker = OcrWorker(files_with_index, ak, sk, self)
+        self.ocr_worker.progress.connect(self._on_ocr_progress)
+        self.ocr_worker.result.connect(self._on_ocr_result)
+        self.ocr_worker.error.connect(self._on_ocr_error)
+        self.ocr_worker.finished_all.connect(self._on_ocr_finished)
+        
+        # 取消处理
+        self.progress_dialog.cancelled.connect(self.ocr_worker.cancel)
+        
+        # 启动工作线程和显示对话框
+        self.ocr_worker.start()
+        self.progress_dialog.show()
+    
+    def _on_ocr_progress(self, current, total, filename):
+        """OCR 进度更新"""
+        if self.progress_dialog:
+            self.progress_dialog.update_progress(current, total, filename)
+    
+    def _on_ocr_result(self, idx, result):
+        """OCR 单个结果返回"""
+        logger = logging.getLogger(__name__)
+        if idx < len(self.data):
+            d = self.data[idx]
+            d["_pending_ocr"] = False
+            
+            if result:
+                if "amount" in result:
+                    d["a"] = result["amount"]
+                if "date" in result:
+                    d["d"] = result["date"]
+                d["ext"] = result
+                logger.info(f"OCR 结果已更新: {d['n']}, 金额: {d.get('a', 0)}")
+                self._save_d_to_db(d)
+
+            
+            # 更新列表项显示
+            item = self.list.item(idx)
+            if item:
+                widget = self.list.itemWidget(item)
+                if widget:
+                    widget.update_display(d)
+            
+            # 更新统计
+            self.calc()
+    
+    def _on_ocr_error(self, idx, error_msg):
+        """OCR 单个错误处理"""
+        logger = logging.getLogger(__name__)
+        if idx < len(self.data):
+            d = self.data[idx]
+            d["_pending_ocr"] = False
+            logger.warning(f"OCR 失败 [{d['n']}]: {error_msg}")
+    
+    def _on_ocr_finished(self):
+        """OCR 全部完成"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"异步 OCR 处理完成，共 {len(self.data)} 个发票")
+        
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+        
+        self.ocr_worker = None
+        self.calc()
+        self.show_layout_preview()
+
+    def calc(self):
+        """计算统计信息（仅计算有效发票，排除清单和非发票凭证）"""
+        total_n = 0
+        total_a = 0.0
+        
+        ignored_types = ["发票清单", "非发票凭证"]
+        
+        for d in self.data:
+            inv_type = d.get("invoice_type", "")
+            # 排除清单和非发票凭证
+            if inv_type in ignored_types or "非发票" in inv_type:
+                continue
+                
+            total_n += 1
+            total_a += d.get("a", 0)
+            
+        self.lbl_inf.setText(f"{total_n} 张发票")
+        self.lbl_tot.setText(f"¥ {total_a:,.2f}")
+    def clear(self): self.list.clear(); self.data=[]; self.calc(); self.trigger_refresh()
+    def ctx_menu(self, p): m=QMenu(); a=QAction("删除",self); a.triggered.connect(self.del_sel); m.addAction(a); m.exec(self.list.mapToGlobal(p))
+    def del_sel(self):
+        for r in sorted([self.list.row(i) for i in self.list.selectedItems()], reverse=True): 
+            self.list.takeItem(r); 
+            d = self.data.pop(r)
+            get_db().delete_invoice(d['p'])
+        self.calc(); self.trigger_refresh()
+    def xls(self):
+        logger = logging.getLogger(__name__)
+        if not self.data: return
+        
+        # 检查激活状态
+        info = self.license_manager.get_activation_info()
+        if not info['is_activated']:
+            if info['remaining_trials'] <= 0:
+                # 试用次数用完，必须激活
+                QMessageBox.warning(self, "需要激活", "试用次数已用完，请激活软件后继续使用。")
+                dialog = ActivationDialog(self, self.license_manager)
+                if dialog.exec() != QDialog.DialogCode.Accepted:
+                    return
+                # 激活成功后继续
+            else:
+                # 还有试用次数，显示提示并询问是否继续
+                remaining = info['remaining_trials']
+                reply = QMessageBox.question(
+                    self, 
+                    "试用提示", 
+                    f"您还有 {remaining} 次免费导出机会。\n\n是否继续导出？\n（导出成功后将使用1次机会）",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return  # 用户选择不继续，直接返回，不扣次数
+        
+        logger.info(f"开始导出 Excel: {len(self.data)} 条数据")
+        
+        # 读取上次保存的路径
+        s = QSettings("MySoft", "InvoiceMaster")
+        last_path = s.value("last_excel_path", os.path.expanduser("~/Desktop/invoice_report.xlsx"))
+        
+        # 先检查默认路径文件是否存在，提供中文选项
+        file_action = "new"  # new=新建, append=追加, overwrite=覆盖
+        
+        if os.path.exists(last_path):
+            # 文件已存在，显示中文选择对话框
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("文件已存在")
+            msg_box.setText(f"文件 \"{os.path.basename(last_path)}\" 已存在。\n\n请选择操作方式：")
+            msg_box.setIcon(QMessageBox.Icon.Question)
+            
+            append_btn = msg_box.addButton("📥 追加数据", QMessageBox.ButtonRole.AcceptRole)
+            overwrite_btn = msg_box.addButton("🔄 覆盖文件", QMessageBox.ButtonRole.DestructiveRole)
+            newfile_btn = msg_box.addButton("📁 另存为...", QMessageBox.ButtonRole.ActionRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.ButtonRole.RejectRole)
+            
+            msg_box.exec()
+            clicked = msg_box.clickedButton()
+            
+            if clicked == cancel_btn:
+                return
+            elif clicked == append_btn:
+                file_action = "append"
+                p = last_path
+            elif clicked == overwrite_btn:
+                file_action = "overwrite"
+                p = last_path
+            elif clicked == newfile_btn:
+                # 用户选择另存为，打开文件对话框
+                p, _ = QFileDialog.getSaveFileName(self, "保存 Excel 报表", last_path, "Excel (*.xlsx)",
+                                                   options=QFileDialog.Option.DontConfirmOverwrite)
+                if not p: return
+                file_action = "overwrite" if os.path.exists(p) else "new"
+        else:
+            # 文件不存在，使用默认路径或让用户选择
+            p, _ = QFileDialog.getSaveFileName(self, "保存 Excel 报表", last_path, "Excel (*.xlsx)",
+                                               options=QFileDialog.Option.DontConfirmOverwrite)
+            if not p: return
+            
+            # 检查用户选择的新路径是否存在
+            if os.path.exists(p):
+                reply = QMessageBox.question(
+                    self, "确认覆盖",
+                    f"文件 \"{os.path.basename(p)}\" 已存在。\n\n是否覆盖该文件？",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+                file_action = "overwrite"
+        
+        # 保存路径供下次使用
+        s.setValue("last_excel_path", p)
+        
+        try:
+            # 准备新数据 - 18个专业字段
+            new_rows = []
+            from datetime import datetime
+            import_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+            
+            export_idx = 1
+            for x in self.data:
+                ext = x.get("ext", {})
+                
+                # [V3.5] 导出过滤：清单和非发票凭证不导出到Excel
+                # 这些只是为了管理查看，不应进入财务报表
+                inv_type = ext.get("invoice_type", "")
+                skipped_types = ["发票清单", "非发票凭证"]
+                if inv_type in skipped_types or "非发票" in inv_type:
+                    continue
+                
+                # 处理金额字段,确保是数值类型
+                try: amount = float(x.get("a", 0) or 0)
+                except: amount = 0
+                try: amount_without_tax = float(ext.get("amount_without_tax", "") or 0)
+                except: amount_without_tax = ""
+                try: tax_amt = float(ext.get("tax_amt", "") or 0)
+                except: tax_amt = ""
+                
+                # 标准导出字段
+                row_data = {
+                    "序号": export_idx,
+                    "开票日期": x.get("d", ""), 
+                    "发票类型": ext.get("invoice_type", ""),
+                    "发票代码": ext.get("code", ""), 
+                    "发票号码": ext.get("number", ""), 
+                    "校验码": ext.get("check_code", "")[-6:] if ext.get("check_code") else "",
+                    "购买方名称": ext.get("buyer", ""),
+                    "购买方税号": ext.get("buyer_tax_id", ""),
+                    "销售方名称": ext.get("seller", ""), 
+                    "销售方税号": ext.get("seller_tax_id", ""),
+                    "不含税金额": amount_without_tax,
+                    "税率": ext.get("tax_rate", ""),
+                    "税额": tax_amt,
+                    "价税合计": amount,
+                    "商品明细": ext.get("item_name", ""),
+                    "备注": ext.get("remark", ""),
+                    "导入时间": import_time,
+                    "文件路径": x.get("p", "")
+                }
+                
+                new_rows.append(row_data)
+                export_idx += 1
+            
+            new_df = pd.DataFrame(new_rows)
+            # 确保列顺序
+            fields = ["序号", "开票日期", "发票类型", "发票代码", "发票号码", "校验码", 
+                     "购买方名称", "购买方税号", "销售方名称", "销售方税号", 
+                     "不含税金额", "税率", "税额", "价税合计", "商品明细", "备注", "导入时间", "文件路径"]
+            new_df = new_df[fields]
+            
+            # 根据用户选择决定是追加还是覆盖
+            if file_action == "append" and os.path.exists(p):
+                try:
+                    existing_df = pd.read_excel(p)
+                    combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+                    is_append = True
+                except Exception:
+                    combined_df = new_df
+                    is_append = False
+            else:
+                combined_df = new_df
+                is_append = False
+            
+            # 保存到 Excel
+            combined_df.to_excel(p, index=False, engine='openpyxl')
+            
+            # 使用 openpyxl 添加专业样式
+            try:
+                from openpyxl import load_workbook
+                from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+                from openpyxl.utils import get_column_letter
+                
+                wb = load_workbook(p)
+                ws = wb.active
+                
+                # 定义样式
+                header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+                header_font = Font(color="FFFFFF", bold=True, size=11)
+                header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+                thin_border = Border(
+                    left=Side(style='thin', color='E2E8F0'),
+                    right=Side(style='thin', color='E2E8F0'),
+                    top=Side(style='thin', color='E2E8F0'),
+                    bottom=Side(style='thin', color='E2E8F0')
+                )
+                
+                # 应用表头样式
+                for col_idx in range(1, ws.max_column + 1):
+                    cell = ws.cell(row=1, column=col_idx)
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = header_align
+                    cell.border = thin_border
+                
+                # 冻结首行
+                ws.freeze_panes = "A2"
+                
+                # 建立字段到列索引的映射 (1-based)
+                field_list = ["序号", "开票日期", "发票类型", "发票代码", "发票号码", "校验码", 
+                             "购买方名称", "购买方税号", "销售方名称", "销售方税号", 
+                             "不含税金额", "税率", "税额", "价税合计", "商品明细", "备注", "导入时间", "文件路径"]
+                col_map = {field: i+1 for i, field in enumerate(field_list)}
+                
+                # 设置列宽
+                field_widths = {
+                    "序号": 6, "开票日期": 12, "发票类型": 14, "发票代码": 14, "发票号码": 12,
+                    "校验码": 10, "购买方名称": 25, "购买方税号": 22, "销售方名称": 25, "销售方税号": 22,
+                    "不含税金额": 12, "税率": 8, "税额": 12, "价税合计": 14, "商品明细": 30,
+                    "备注": 20, "导入时间": 18, "文件路径": 40
+                }
+                for i, field in enumerate(field_list, 1):
+                    if field in field_widths:
+                        ws.column_dimensions[get_column_letter(i)].width = field_widths[field]
+                
+                # 检测重复发票：发票号码 + 开票日期 + 金额 三者都相同才算重复
+                invoice_keys = {}
+                duplicate_rows = set()
+                num_col_idx = col_map.get("发票号码")
+                date_col_idx = col_map.get("开票日期")
+                amount_col_idx = col_map.get("价税合计")
+                
+                if num_col_idx:
+                    for row_idx in range(2, ws.max_row + 1):
+                        invoice_num = ws.cell(row=row_idx, column=num_col_idx).value
+                        invoice_date = ws.cell(row=row_idx, column=date_col_idx).value if date_col_idx else ""
+                        invoice_amount = ws.cell(row=row_idx, column=amount_col_idx).value if amount_col_idx else ""
+                        
+                        # 组合键：号码+日期+金额
+                        if invoice_num and str(invoice_num).strip():
+                            key = f"{invoice_num}|{invoice_date}|{invoice_amount}"
+                            if key in invoice_keys:
+                                duplicate_rows.add(row_idx)
+                                duplicate_rows.add(invoice_keys[key])
+                            else:
+                                invoice_keys[key] = row_idx
+                
+                # 金额列索引
+                amount_cols = [col_map.get(f) for f in ["不含税金额", "税额", "价税合计"] if f in col_map]
+                
+                # 应用数据行样式(斑马纹 + 重复标记)
+                for row_idx in range(2, ws.max_row + 1):
+                    is_duplicate = row_idx in duplicate_rows
+                    is_zebra = row_idx % 2 == 0
+                    for col_idx in range(1, ws.max_column + 1):
+                        cell = ws.cell(row=row_idx, column=col_idx)
+                        cell.border = thin_border
+                        if is_duplicate:
+                            cell.fill = yellow_fill
+                        elif is_zebra:
+                            cell.fill = zebra_fill
+                        # 金额列右对齐
+                        if col_idx in amount_cols:
+                            cell.alignment = Alignment(horizontal="right")
+                
+                # 添加底部统计行
+                # 计算总金额
+                total_amount = 0
+                amount_col_idx = col_map.get("价税合计")
+                
+                if amount_col_idx:
+                    for row_idx in range(2, ws.max_row + 1):  # 遍历到现有最大行
+                        try:
+                            val = ws.cell(row=row_idx, column=amount_col_idx).value
+                            if val: total_amount += float(val)
+                        except: pass
+                
+                stat_row = ws.max_row + 1
+                
+                # 在第一列或"序号"列显示"统计"
+                label_col = col_map.get("序号", 1)
+                ws.cell(row=stat_row, column=label_col, value="统计").font = Font(bold=True)
+                
+                # 在第二列或"开票日期"列显示数量
+                count_col = col_map.get("开票日期", 2)
+                ws.cell(row=stat_row, column=count_col, value=f"共 {len(new_rows)} 张发票")
+                
+                # 显示总金额
+                if amount_col_idx:
+                    ws.cell(row=stat_row, column=amount_col_idx, value=f"¥{total_amount:,.2f}").font = Font(bold=True, color="DC2626")
+                
+                # 添加工作表保护(安全锁定功能)
+                # 允许: 选择单元格、复制、排序、筛选、查找
+                # 禁止: 编辑内容、删除行列、修改格式、插入行列
+                from openpyxl.worksheet.protection import SheetProtection
+                SHEET_PASSWORD = "InvoiceMaster2024"  # 保护密码
+                
+                ws.protection = SheetProtection(
+                    sheet=True,
+                    password=SHEET_PASSWORD,
+                    selectLockedCells=False,
+                    selectUnlockedCells=False,
+                    sort=False,
+                    autoFilter=False,
+                    formatCells=True,
+                    formatColumns=True,
+                    formatRows=True,
+                    insertColumns=True,
+                    insertRows=True,
+                    insertHyperlinks=True,
+                    deleteColumns=True,
+                    deleteRows=True,
+                    objects=False,
+                    scenarios=False,
+                    pivotTables=False,
+                )
+                logger.info("Excel 工作表保护已启用")
+                
+                wb.save(p)
+                
+                # 提示信息
+                if is_append:
+                    msg = f"✅ 已追加 {len(new_df)} 条数据到现有文件！\n"
+                    logger.info(f"Excel 追加成功: {p}, 新增 {len(new_df)} 条")
+                else:
+                    msg = f"✅ 已导出 {len(new_df)} 条数据！\n"
+                    logger.info(f"Excel 导出成功: {p}, 共 {len(new_df)} 条")
+                
+                msg += f"💰 价税合计: ¥{total_amount:,.2f}\n"
+                
+                if duplicate_rows:
+                    msg += f"⚠️ 检测到 {len(duplicate_rows)//2} 组重复发票（已用黄色标记）\n"
+                    logger.warning(f"检测到 {len(duplicate_rows)} 条重复发票")
+                else:
+                    msg += "✓ 未检测到重复发票\n"
+                
+                msg += "🔒 工作表已保护，仅允许查看和复制"
+                
+                # 导出成功后，扣除试用次数（如果未激活）
+                info = self.license_manager.get_activation_info()
+                if not info['is_activated']:
+                    self.license_manager.increment_trial_count()
+                    logger.info("试用次数已扣除")
+                
+                QMessageBox.information(self, "导出成功", msg)
+                
+            except Exception as e:
+                # 如果颜色标记失败，至少数据已保存
+                logger.warning(f"Excel 颜色标记失败: {str(e)}")
+                QMessageBox.information(self, "导出成功", f"数据已导出，但颜色标记失败: {str(e)}")
+                
+        except Exception as e:
+            logger.error(f"Excel 导出失败: {str(e)}", exc_info=True)
+            QMessageBox.critical(self, "导出失败", f"错误: {str(e)}")
+    def run(self):
+        """执行打印操作（异步）"""
+        if not self.data: 
+            return QMessageBox.warning(self, "Tips", "请先添加发票")
+        
+        self.btn_go.setText("处理中...")
+        self.btn_go.setEnabled(False)
+        QApplication.processEvents()
+        
+        # 准备参数
+        m = "1x1"
+        m = "1x2" if self.b2.isChecked() else m
+        m = "2x2" if self.b4.isChecked() else m
+        o = "H" if self.rd_l.isChecked() else "V"
+        out = os.path.expanduser("~/Desktop/Print_Job.pdf")
+        
+        if out not in self.temp_files:
+            self.temp_files.append(out)
+        
+        paper = self.cb_pap.currentText().replace("纸张: ", "") if "纸张: " in self.cb_pap.currentText() else self.cb_pap.currentText()
+        
+        # 保存打印参数供回调使用
+        self._print_params = {
+            "out_path": out,
+            "open_only": self.cb_pr.currentIndex() == 0,
+            "copies": self.sp_cpy.value(),
+            "force_rotate": self.chk_rotate.isChecked()
+        }
+        
+        # 使用异步 PDF 合并
+        files = [x["p"] for x in self.data]
+        self.pdf_worker = PdfWorker(files, m, paper, o, self.chk_cut.isChecked(), out, self)
+        self.pdf_worker.progress.connect(self._on_pdf_progress)
+        self.pdf_worker.finished.connect(self._on_pdf_merge_finished)
+        self.pdf_worker.error.connect(self._on_pdf_error)
+        self.pdf_worker.start()
+    
+    def _on_pdf_progress(self, current, total):
+        """PDF 合并进度"""
+        self.btn_go.setText(f"合并 PDF ({current}/{total})...")
+        QApplication.processEvents()
+    
+    def _on_pdf_merge_finished(self, out_path):
+        """PDF 合并完成，开始打印"""
+        self.pdf_worker = None
+        params = self._print_params
+        
+        if params["open_only"]:
+            # 仅打开 PDF
+            if platform.system() == "Windows":
+                os.startfile(out_path, "print")
+            elif platform.system() == "Darwin":
+                os.system(f"open '{out_path}'")
+            else:
+                os.system(f"xdg-open '{out_path}'")
+            self.btn_go.setText(" 开始打印")
+            self.btn_go.setEnabled(True)
+        else:
+            # 异步打印
+            self._start_async_print(out_path, params["copies"], params["force_rotate"])
+    
+    def _on_pdf_error(self, error_msg):
+        """PDF 合并错误"""
+        self.pdf_worker = None
+        self.btn_go.setText("重试")
+        self.btn_go.setEnabled(True)
+        QMessageBox.critical(self, "Error", error_msg)
+    
+    def _start_async_print(self, pdf_path, copies, force_rotate):
+        """启动异步打印"""
+        p_name = self.cb_pr.currentText().replace("🖨️ ", "")
+        self.btn_go.setText(f"正在发送至 {p_name}...")
+        
+        self.print_worker = PrintWorker(pdf_path, self.current_printer, copies, force_rotate, self)
+        self.print_worker.progress.connect(self._on_print_progress)
+        self.print_worker.finished.connect(self._on_print_finished)
+        self.print_worker.start()
+    
+    def _on_print_progress(self, current, total):
+        """打印进度"""
+        self.btn_go.setText(f"打印中 ({current}/{total})...")
+        QApplication.processEvents()
+    
+    def _on_print_finished(self, success, msg):
+        """打印完成"""
+        self.print_worker = None
+        self.btn_go.setText(" 开始打印")
+        self.btn_go.setEnabled(True)
+        
+        if success:
+            QMessageBox.information(self, "完成", "已发送")
+        else:
+            QMessageBox.critical(self, "错误", msg)

@@ -1,13 +1,8 @@
-"""
-图标资源模块
-"""
+
 from PyQt6.QtGui import QIcon, QPixmap, QImage
 from PyQt6.QtCore import QByteArray
 
-
 class Icons:
-    """SVG 图标管理器"""
-    
     _SVGS = {
         "upload": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>""",
         "settings": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>""",
@@ -25,13 +20,6 @@ class Icons:
         "layout_2x2_card": """<svg viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="6" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="6" y="26" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><rect x="26" y="26" width="16" height="16" rx="2" fill="#f0f0f0" stroke="{c}" stroke-width="2"/><text x="14" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="34" y="14" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="14" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text><text x="34" y="34" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="6">发票</text></svg>""",
         "monitor": """<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>"""
     }
-    
     @staticmethod
     def get(name, color="#555"):
-        """获取指定颜色的图标"""
-        svg_data = Icons._SVGS.get(name, "")
-        if not svg_data:
-            return QIcon()
-        return QIcon(QPixmap.fromImage(
-            QImage.fromData(QByteArray(svg_data.format(c=color).encode()))
-        ))
+        return QIcon(QPixmap.fromImage(QImage.fromData(QByteArray(Icons._SVGS.get(name,"").format(c=color).encode()))))

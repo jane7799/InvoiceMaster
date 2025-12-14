@@ -46,38 +46,88 @@ class OcrWorker(QThread):
         self._is_cancelled = True
         
     def run(self):
-        """执行 OCR 处理"""
-        total = len(self.files_with_index)
-        s = QSettings("MySoft", "InvoiceMaster")
-        private_ocr_url = s.value("private_ocr_url", "")
+        """执行 OCR 处理（并行处理）"""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        # 导入 InvoiceHelper（延迟导入避免循环引用）
+        from .invoice_helper import InvoiceHelper
         
-        for i, (idx, fp) in enumerate(self.files_with_index):
+        total = len(self.files_with_index)
+        completed = 0
+        
+        # 使用线程池并行处理，最多8个并发（提升大批量处理性能）
+        max_workers = min(8, total)
+        
+        def process_file(idx, fp):
+            """处理单个文件"""
             if self._is_cancelled:
-                break
-                
-            filename = os.path.basename(fp)
-            self.progress.emit(i + 1, total, filename)
-            
+                return idx, None, None
             try:
-                # 优先尝试私有 OCR
+                # 检查是否配置了私有OCR
+                from PyQt6.QtCore import QSettings
+                settings = QSettings("MySoft", "InvoiceMaster")
+                private_url = settings.value("private_ocr_url", "")
+                
                 result = None
-                if private_ocr_url:
+                ocr_error = None
+                
+                # 优先尝试私有OCR
+                if private_url:
                     try:
-                        result = self._call_private_ocr(fp, private_ocr_url)
-                        if result:
-                            self.logger.info(f"私有OCR成功: {filename}")
+                        result = self._call_private_ocr(fp, private_url)
                     except Exception as e:
-                        self.logger.warning(f"私有OCR失败: {str(e)}，回退到百度OCR")
+                        ocr_error = f"私有OCR失败({str(e)})"
+                        self.logger.warning(f"{os.path.basename(fp)} 私有OCR失败，尝试调用百度OCR")
                 
-                # 回退到百度 OCR
+                # 如果没配私有OCR，或私有OCR失败，尝试百度OCR
                 if not result:
-                    result = self._call_baidu_ocr(fp)
-                
-                self.result.emit(idx, result if result else {})
-                
+                    try:
+                        result = self._call_baidu_ocr(fp)
+                    except Exception as e:
+                        if ocr_error:
+                            ocr_error += f"; 百度OCR失败({str(e)})"
+                        else:
+                            ocr_error = str(e)
+                            
+                if result:
+                    return idx, result, None
+                else:
+                    return idx, {}, ocr_error or "所有OCR服务均不可用"
+                    
             except Exception as e:
-                self.logger.error(f"OCR处理失败: {filename}, 错误: {str(e)}")
-                self.error.emit(idx, str(e))
+                return idx, None, str(e)
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # 提交所有任务
+            future_to_file = {
+                executor.submit(process_file, idx, fp): (idx, fp) 
+                for idx, fp in self.files_with_index
+            }
+            
+            # 按完成顺序处理结果
+            for future in as_completed(future_to_file):
+                if self._is_cancelled:
+                    # 取消所有未完成的任务
+                    for f in future_to_file:
+                        f.cancel()
+                    break
+                
+                idx, fp = future_to_file[future]
+                filename = os.path.basename(fp)
+                completed += 1
+                
+                # 发送进度信号
+                self.progress.emit(completed, total, filename)
+                
+                try:
+                    result_idx, result, error = future.result()
+                    if error:
+                        self.logger.error(f"OCR处理失败: {filename}, 错误: {error}")
+                        self.error.emit(result_idx, error)
+                    elif result is not None:
+                        self.result.emit(result_idx, result)
+                except Exception as e:
+                    self.logger.error(f"OCR处理失败: {filename}, 错误: {str(e)}")
+                    self.error.emit(idx, str(e))
                 
         self.finished_all.emit()
     
@@ -337,7 +387,7 @@ class PrintWorker(QThread):
                     
                     try:
                         safe_rect = self.printer.pageLayout().paintRectPixels(self.printer.resolution())
-                    except:
+                    except Exception:
                         safe_rect = page_rect
                     
                     target_w = int(safe_rect.width())

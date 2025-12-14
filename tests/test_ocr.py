@@ -4,28 +4,36 @@ OCR 引擎单元测试
 import os
 import sys
 import unittest
-import tempfile
 
 # 添加项目根目录到 path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.core.ocr_engine import InvoiceHelper
-
+from src.core.invoice_helper import InvoiceHelper
+from PyQt6.QtGui import QGuiApplication
 
 class TestInvoiceHelper(unittest.TestCase):
     """InvoiceHelper 测试用例"""
     
+    @classmethod
+    def setUpClass(cls):
+        # 创建 QGuiApplication 实例以支持 QPixmap
+        cls.app = QGuiApplication(sys.argv)
+
     def test_parse_amount_local_empty(self):
         """测试空文件解析"""
-        amount, date = InvoiceHelper.parse_amount_local("/nonexistent/file.pdf")
-        self.assertEqual(amount, 0.0)
-        self.assertEqual(date, "")
+        # parse_invoice_local returns a dict
+        result = InvoiceHelper.parse_invoice_local("/nonexistent/file.pdf")
+        self.assertEqual(result.get('amount', 0), 0.0)
+        self.assertEqual(result.get('date', ''), "")
     
     def test_thumb_nonexistent(self):
         """测试不存在文件的缩略图"""
+        # 应该返回默认图标的 QPixmap
         result = InvoiceHelper.thumb("/nonexistent/file.pdf")
-        # 应该返回 None 或默认图标
-        self.assertIsNone(result)
+        self.assertIsNotNone(result)
+        # 验证是 QPixmap
+        from PyQt6.QtGui import QPixmap
+        self.assertIsInstance(result, QPixmap)
 
 
 class TestInvoiceHelperIntegration(unittest.TestCase):
@@ -34,7 +42,6 @@ class TestInvoiceHelperIntegration(unittest.TestCase):
     @unittest.skip("需要 API 配置")
     def test_ocr_with_baidu(self):
         """测试百度 OCR（需要有效 API Key）"""
-        # 这个测试需要真实的 API Key 和测试文件
         pass
 
 

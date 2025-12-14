@@ -4,3 +4,5 @@ pandas
 requests
 openpyxl
 pymupdf
+pyzbar
+opencv-python

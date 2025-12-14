@@ -8,7 +8,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('license_manager.py', '.'),
+        ('src/core/license_manager.py', 'src/core'),
         ('qr1.jpg', '.'),
         ('qr2.jpg', '.'),
         ('icon_1x1_l.png', '.'),
@@ -27,6 +27,12 @@ a = Analysis(
         'openpyxl',
         'fitz',
         'requests',
+        'src.core.database', 'src.core.workers', 'src.core.pdf_engine', 'src.core.print_engine',
+        'src.core.invoice_helper', 'src.core.license_manager', 
+        'src.utils.log_manager', 'src.utils.icons', 'src.utils.config', 'src.utils.utils',
+        'src.themes.theme_manager',
+        'src.ui.main_window', 'src.ui.dialogs', 'src.ui.settings_dialog', 
+        'src.ui.statistics_dialog', 'src.ui.widgets', 'src.ui.preview'
     ],
     hookspath=[],
     hooksconfig={},

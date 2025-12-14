@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  paddleocr:
+    # 使用百度官方 2.8.1 CPU 版本镜像
+    image: registry.baidubce.com/paddlepaddle/paddleocr:2.8.1-cpu-latest
+    container_name: paddleocr-api
+    
+    # 端口映射：外部 8891 -> 容器内部 8866
+    ports:
+      - "8891:8866"
+    
+    environment:
+      - TZ=Asia/Shanghai
+    
+    # 重启策略：NAS重启后自动启动
+    restart: always
+    
+    # 关键优化：挂载目录，将下载的模型和模块保存在 NAS 本地
+    # 这样重启容器后只需加载，无需重新下载
+    volumes:
+      - ./paddlehub_data:/root/.paddlehub
+    
+    # 启动命令逻辑：
+    # 1. 设置 pip 清华源 (加速下载)
+    # 2. 安装 paddlehub (服务框架)
+    # 3. 安装 ocr_system (OCR模型，如果本地有 volumes 缓存则会跳过下载)
+    # 4. 启动 API 服务
+    entrypoint: /bin/bash
+    command: -c "pip install paddlehub -i https://pypi.tuna.tsinghua.edu.cn/simple && hub install deploy/hubserving/ocr_system/ && hub serving start -m ocr_system"
+    
+    deploy:
+      resources:
+        limits:
+          memory: 4G  # OCR 比较吃内存，建议给足
+        reservations:
+          memory: 1G

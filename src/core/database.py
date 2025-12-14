@@ -1,374 +1,356 @@
 """
-数据库模块
-提供发票历史记录的持久化存储和查询功能
+发票数据库模块
+使用 SQLite 存储发票历史记录，支持查询和统计
 """
 import os
 import sqlite3
-import platform
-import logging
+import json
 from datetime import datetime
-from typing import List, Dict, Optional, Any
-from contextlib import contextmanager
+from typing import List, Dict, Optional
 
 
 class InvoiceDatabase:
-    """发票数据库管理器"""
+    """发票数据库管理类"""
     
     def __init__(self, db_path: str = None):
         """
         初始化数据库
         
         Args:
-            db_path: 数据库文件路径，默认为用户数据目录
+            db_path: 数据库文件路径，默认为用户目录下的 .invoicemaster/invoices.db
         """
-        self.logger = logging.getLogger(__name__)
-        self.db_path = db_path or self._get_default_db_path()
-        self._ensure_db_dir()
+        if db_path is None:
+            # 默认存储位置
+            app_dir = os.path.expanduser("~/.invoicemaster")
+            os.makedirs(app_dir, exist_ok=True)
+            db_path = os.path.join(app_dir, "invoices.db")
+        
+        self.db_path = db_path
         self._init_db()
-    
-    @staticmethod
-    def _get_default_db_path() -> str:
-        """获取跨平台默认数据库路径"""
-        system = platform.system()
-        if system == "Windows":
-            base = os.environ.get('APPDATA', os.path.expanduser('~'))
-            return os.path.join(base, 'InvoiceMaster', 'invoices.db')
-        elif system == "Darwin":  # macOS
-            return os.path.expanduser('~/Library/Application Support/InvoiceMaster/invoices.db')
-        else:  # Linux/UOS
-            return os.path.expanduser('~/.local/share/InvoiceMaster/invoices.db')
-    
-    def _ensure_db_dir(self):
-        """确保数据库目录存在"""
-        db_dir = os.path.dirname(self.db_path)
-        if db_dir and not os.path.exists(db_dir):
-            os.makedirs(db_dir, exist_ok=True)
-            self.logger.info(f"创建数据库目录: {db_dir}")
-    
-    @contextmanager
-    def _get_connection(self):
-        """获取数据库连接的上下文管理器"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            raise e
-        finally:
-            conn.close()
     
     def _init_db(self):
         """初始化数据库表结构"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # 发票主表
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS invoices (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    file_path TEXT NOT NULL,
-                    file_name TEXT NOT NULL,
-                    invoice_code TEXT,
-                    invoice_number TEXT,
-                    invoice_date TEXT,
-                    amount REAL DEFAULT 0,
-                    amount_without_tax REAL DEFAULT 0,
-                    tax_amount REAL DEFAULT 0,
-                    tax_rate TEXT,
-                    seller_name TEXT,
-                    seller_tax_id TEXT,
-                    buyer_name TEXT,
-                    buyer_tax_id TEXT,
-                    invoice_type TEXT,
-                    item_name TEXT,
-                    check_code TEXT,
-                    machine_code TEXT,
-                    remark TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_deleted INTEGER DEFAULT 0,
-                    UNIQUE(file_path)
-                )
-            """)
-            
-            # 导出记录表
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS export_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    export_path TEXT NOT NULL,
-                    export_type TEXT DEFAULT 'excel',
-                    invoice_count INTEGER DEFAULT 0,
-                    total_amount REAL DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # 打印记录表
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS print_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    printer_name TEXT,
-                    layout_mode TEXT,
-                    paper_size TEXT,
-                    copies INTEGER DEFAULT 1,
-                    invoice_count INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # 创建索引
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(invoice_date)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_invoices_seller ON invoices(seller_name)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_invoices_amount ON invoices(amount)")
-            
-            self.logger.info(f"数据库初始化完成: {self.db_path}")
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 创建发票表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS invoices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_path TEXT UNIQUE,
+                file_name TEXT,
+                invoice_type TEXT,
+                date TEXT,
+                amount REAL DEFAULT 0,
+                amount_without_tax REAL DEFAULT 0,
+                tax_amount REAL DEFAULT 0,
+                buyer TEXT,
+                buyer_tax_id TEXT,
+                seller TEXT,
+                seller_tax_id TEXT,
+                invoice_number TEXT,
+                invoice_code TEXT,
+                check_code TEXT,
+                item_name TEXT,
+                remark TEXT,
+                raw_data TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # 创建索引
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_date ON invoices(date)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_invoice_type ON invoices(invoice_type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_buyer ON invoices(buyer)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_seller ON invoices(seller)')
+        
+        conn.commit()
+        conn.close()
     
-    # ==================== 发票 CRUD ====================
-    
-    def save_invoice(self, invoice_data: Dict[str, Any]) -> int:
+    def save_invoice(self, data: Dict) -> int:
         """
         保存或更新发票记录
         
         Args:
-            invoice_data: 发票数据字典
+            data: 发票数据字典
             
         Returns:
             发票记录 ID
         """
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # 检查是否已存在
-            cursor.execute("SELECT id FROM invoices WHERE file_path = ?", (invoice_data.get('file_path', ''),))
-            existing = cursor.fetchone()
-            
-            if existing:
-                # 更新
-                cursor.execute("""
-                    UPDATE invoices SET
-                        file_name = ?,
-                        invoice_code = ?,
-                        invoice_number = ?,
-                        invoice_date = ?,
-                        amount = ?,
-                        amount_without_tax = ?,
-                        tax_amount = ?,
-                        tax_rate = ?,
-                        seller_name = ?,
-                        seller_tax_id = ?,
-                        buyer_name = ?,
-                        buyer_tax_id = ?,
-                        invoice_type = ?,
-                        item_name = ?,
-                        check_code = ?,
-                        machine_code = ?,
-                        remark = ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (
-                    invoice_data.get('file_name', ''),
-                    invoice_data.get('code', ''),
-                    invoice_data.get('number', ''),
-                    invoice_data.get('date', ''),
-                    float(invoice_data.get('amount', 0) or 0),
-                    float(invoice_data.get('amount_without_tax', 0) or 0),
-                    float(invoice_data.get('tax_amt', 0) or 0),
-                    invoice_data.get('tax_rate', ''),
-                    invoice_data.get('seller', ''),
-                    invoice_data.get('seller_tax_id', ''),
-                    invoice_data.get('buyer', ''),
-                    invoice_data.get('buyer_tax_id', ''),
-                    invoice_data.get('invoice_type', ''),
-                    invoice_data.get('item_name', ''),
-                    invoice_data.get('check_code', ''),
-                    invoice_data.get('machine_code', ''),
-                    invoice_data.get('remark', ''),
-                    existing['id']
-                ))
-                return existing['id']
-            else:
-                # 插入
-                cursor.execute("""
-                    INSERT INTO invoices (
-                        file_path, file_name, invoice_code, invoice_number, 
-                        invoice_date, amount, amount_without_tax, tax_amount,
-                        tax_rate, seller_name, seller_tax_id, buyer_name,
-                        buyer_tax_id, invoice_type, item_name, check_code,
-                        machine_code, remark
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    invoice_data.get('file_path', ''),
-                    invoice_data.get('file_name', ''),
-                    invoice_data.get('code', ''),
-                    invoice_data.get('number', ''),
-                    invoice_data.get('date', ''),
-                    float(invoice_data.get('amount', 0) or 0),
-                    float(invoice_data.get('amount_without_tax', 0) or 0),
-                    float(invoice_data.get('tax_amt', 0) or 0),
-                    invoice_data.get('tax_rate', ''),
-                    invoice_data.get('seller', ''),
-                    invoice_data.get('seller_tax_id', ''),
-                    invoice_data.get('buyer', ''),
-                    invoice_data.get('buyer_tax_id', ''),
-                    invoice_data.get('invoice_type', ''),
-                    invoice_data.get('item_name', ''),
-                    invoice_data.get('check_code', ''),
-                    invoice_data.get('machine_code', ''),
-                    invoice_data.get('remark', '')
-                ))
-                return cursor.lastrowid
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        file_path = data.get("file_path", "")
+        
+        # 检查是否已存在
+        cursor.execute('SELECT id FROM invoices WHERE file_path = ?', (file_path,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            # 更新现有记录
+            cursor.execute('''
+                UPDATE invoices SET
+                    file_name = ?,
+                    invoice_type = ?,
+                    date = ?,
+                    amount = ?,
+                    amount_without_tax = ?,
+                    tax_amount = ?,
+                    buyer = ?,
+                    buyer_tax_id = ?,
+                    seller = ?,
+                    seller_tax_id = ?,
+                    invoice_number = ?,
+                    invoice_code = ?,
+                    check_code = ?,
+                    item_name = ?,
+                    remark = ?,
+                    raw_data = ?,
+                    updated_at = ?
+                WHERE file_path = ?
+            ''', (
+                data.get("file_name", os.path.basename(file_path)),
+                data.get("invoice_type", ""),
+                data.get("date", ""),
+                float(data.get("amount", 0) or 0),
+                float(data.get("amount_without_tax", 0) or 0),
+                float(data.get("tax_amt", 0) or 0),
+                data.get("buyer", ""),
+                data.get("buyer_tax_id", ""),
+                data.get("seller", ""),
+                data.get("seller_tax_id", ""),
+                data.get("number", ""),
+                data.get("code", ""),
+                data.get("check_code", ""),
+                data.get("item_name", ""),
+                data.get("remark", ""),
+                json.dumps(data, ensure_ascii=False),
+                datetime.now().isoformat(),
+                file_path
+            ))
+            invoice_id = existing[0]
+        else:
+            # 插入新记录
+            cursor.execute('''
+                INSERT INTO invoices (
+                    file_path, file_name, invoice_type, date, amount,
+                    amount_without_tax, tax_amount, buyer, buyer_tax_id,
+                    seller, seller_tax_id, invoice_number, invoice_code,
+                    check_code, item_name, remark, raw_data
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                file_path,
+                data.get("file_name", os.path.basename(file_path)),
+                data.get("invoice_type", ""),
+                data.get("date", ""),
+                float(data.get("amount", 0) or 0),
+                float(data.get("amount_without_tax", 0) or 0),
+                float(data.get("tax_amt", 0) or 0),
+                data.get("buyer", ""),
+                data.get("buyer_tax_id", ""),
+                data.get("seller", ""),
+                data.get("seller_tax_id", ""),
+                data.get("number", ""),
+                data.get("code", ""),
+                data.get("check_code", ""),
+                data.get("item_name", ""),
+                data.get("remark", ""),
+                json.dumps(data, ensure_ascii=False)
+            ))
+            invoice_id = cursor.lastrowid
+        
+        conn.commit()
+        conn.close()
+        return invoice_id
     
-    def get_invoice(self, invoice_id: int) -> Optional[Dict]:
-        """获取单个发票"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM invoices WHERE id = ? AND is_deleted = 0", (invoice_id,))
-            row = cursor.fetchone()
-            return dict(row) if row else None
+    def get_invoice_by_path(self, file_path: str) -> Optional[Dict]:
+        """根据文件路径获取发票记录"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM invoices WHERE file_path = ?', (file_path,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return dict(row)
+        return None
     
-    def get_invoices(self, limit: int = 100, offset: int = 0) -> List[Dict]:
-        """获取发票列表"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM invoices 
-                WHERE is_deleted = 0 
-                ORDER BY created_at DESC 
-                LIMIT ? OFFSET ?
-            """, (limit, offset))
-            return [dict(row) for row in cursor.fetchall()]
+    def get_all_invoices(self, limit: int = 1000) -> List[Dict]:
+        """获取所有发票记录"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM invoices ORDER BY date DESC LIMIT ?', (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [dict(row) for row in rows]
     
-    def search_invoices(
-        self,
-        keyword: str = None,
-        date_from: str = None,
-        date_to: str = None,
-        amount_min: float = None,
-        amount_max: float = None,
-        seller: str = None,
-        limit: int = 100
-    ) -> List[Dict]:
+    def search_invoices(self, 
+                       start_date: str = None,
+                       end_date: str = None,
+                       invoice_type: str = None,
+                       buyer: str = None,
+                       seller: str = None,
+                       min_amount: float = None,
+                       max_amount: float = None) -> List[Dict]:
+        """搜索发票"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        conditions = []
+        params = []
+        
+        if start_date:
+            conditions.append("date >= ?")
+            params.append(start_date)
+        if end_date:
+            conditions.append("date <= ?")
+            params.append(end_date)
+        if invoice_type:
+            conditions.append("invoice_type LIKE ?")
+            params.append(f"%{invoice_type}%")
+        if buyer:
+            conditions.append("buyer LIKE ?")
+            params.append(f"%{buyer}%")
+        if seller:
+            conditions.append("seller LIKE ?")
+            params.append(f"%{seller}%")
+        if min_amount is not None:
+            conditions.append("amount >= ?")
+            params.append(min_amount)
+        if max_amount is not None:
+            conditions.append("amount <= ?")
+            params.append(max_amount)
+        
+        query = "SELECT * FROM invoices"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY date DESC"
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [dict(row) for row in rows]
+    
+    def delete_invoice(self, file_path: str) -> bool:
+        """删除发票记录"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM invoices WHERE file_path = ?', (file_path,))
+        deleted = cursor.rowcount > 0
+        
+        conn.commit()
+        conn.close()
+        return deleted
+    
+    def get_statistics(self, year: int = None, month: int = None) -> Dict:
         """
-        搜索发票
+        获取统计数据
         
         Args:
-            keyword: 关键词（匹配发票号、销售方、商品名）
-            date_from: 开始日期 (YYYY-MM-DD)
-            date_to: 结束日期 (YYYY-MM-DD)
-            amount_min: 最小金额
-            amount_max: 最大金额
-            seller: 销售方名称
-            limit: 返回数量限制
+            year: 年份（可选）
+            month: 月份（可选）
+            
+        Returns:
+            统计数据字典
         """
-        conditions = ["is_deleted = 0"]
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        conditions = []
         params = []
         
-        if keyword:
-            conditions.append(
-                "(invoice_number LIKE ? OR seller_name LIKE ? OR item_name LIKE ? OR buyer_name LIKE ?)"
-            )
-            keyword_pattern = f"%{keyword}%"
-            params.extend([keyword_pattern] * 4)
+        if year:
+            conditions.append("strftime('%Y', date) = ?")
+            params.append(str(year))
+        if month:
+            conditions.append("strftime('%m', date) = ?")
+            params.append(f"{month:02d}")
         
-        if date_from:
-            conditions.append("invoice_date >= ?")
-            params.append(date_from)
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
         
-        if date_to:
-            conditions.append("invoice_date <= ?")
-            params.append(date_to)
+        # [V3.5] 统计时排除清单和非发票凭证
+        exclude_condition = "invoice_type != '发票清单' AND invoice_type != '非发票凭证' AND invoice_type NOT LIKE '非发票%'"
         
-        if amount_min is not None:
-            conditions.append("amount >= ?")
-            params.append(amount_min)
+        if where_clause:
+            where_clause += f" AND {exclude_condition}"
+        else:
+            where_clause = f"WHERE {exclude_condition}"
         
-        if amount_max is not None:
-            conditions.append("amount <= ?")
-            params.append(amount_max)
+        # 总金额统计
+        cursor.execute(f'''
+            SELECT 
+                COUNT(*) as total_count,
+                COALESCE(SUM(amount), 0) as total_amount,
+                COALESCE(SUM(tax_amount), 0) as total_tax
+            FROM invoices {where_clause}
+        ''', params)
+        totals = cursor.fetchone()
         
-        if seller:
-            conditions.append("seller_name LIKE ?")
-            params.append(f"%{seller}%")
+        # 按类型分组统计
+        cursor.execute(f'''
+            SELECT 
+                invoice_type,
+                COUNT(*) as count,
+                COALESCE(SUM(amount), 0) as amount
+            FROM invoices {where_clause}
+            GROUP BY invoice_type
+            ORDER BY amount DESC
+        ''', params)
+        by_type = cursor.fetchall()
         
-        query = f"""
-            SELECT * FROM invoices 
-            WHERE {' AND '.join(conditions)}
-            ORDER BY invoice_date DESC
-            LIMIT ?
-        """
-        params.append(limit)
+        # 按月份分组统计
+        cursor.execute(f'''
+            SELECT 
+                strftime('%Y-%m', date) as month,
+                COUNT(*) as count,
+                COALESCE(SUM(amount), 0) as amount
+            FROM invoices {where_clause}
+            GROUP BY strftime('%Y-%m', date)
+            ORDER BY month DESC
+            LIMIT 12
+        ''', params)
+        by_month = cursor.fetchall()
         
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return {
+            "total_count": totals[0],
+            "total_amount": totals[1],
+            "total_tax": totals[2],
+            "by_type": [{"type": row[0] or "未分类", "count": row[1], "amount": row[2]} for row in by_type],
+            "by_month": [{"month": row[0] or "未知", "count": row[1], "amount": row[2]} for row in by_month]
+        }
     
-    def delete_invoice(self, invoice_id: int, soft: bool = True) -> bool:
-        """删除发票（默认软删除）"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            if soft:
-                cursor.execute("UPDATE invoices SET is_deleted = 1 WHERE id = ?", (invoice_id,))
-            else:
-                cursor.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
-            return cursor.rowcount > 0
-    
-    def get_statistics(self, date_from: str = None, date_to: str = None) -> Dict:
-        """获取统计信息"""
-        conditions = ["is_deleted = 0"]
-        params = []
+    def clear_all(self) -> int:
+        """清空所有记录"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
         
-        if date_from:
-            conditions.append("invoice_date >= ?")
-            params.append(date_from)
-        if date_to:
-            conditions.append("invoice_date <= ?")
-            params.append(date_to)
+        cursor.execute('DELETE FROM invoices')
+        deleted = cursor.rowcount
         
-        where_clause = ' AND '.join(conditions)
-        
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(f"""
-                SELECT 
-                    COUNT(*) as total_count,
-                    SUM(amount) as total_amount,
-                    SUM(tax_amount) as total_tax,
-                    AVG(amount) as avg_amount,
-                    MIN(amount) as min_amount,
-                    MAX(amount) as max_amount
-                FROM invoices WHERE {where_clause}
-            """, params)
-            row = cursor.fetchone()
-            return dict(row) if row else {}
-    
-    # ==================== 导出/打印记录 ====================
-    
-    def save_export_record(self, export_path: str, invoice_count: int, total_amount: float):
-        """保存导出记录"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO export_history (export_path, invoice_count, total_amount)
-                VALUES (?, ?, ?)
-            """, (export_path, invoice_count, total_amount))
-    
-    def save_print_record(self, printer_name: str, layout_mode: str, paper_size: str, copies: int, invoice_count: int):
-        """保存打印记录"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO print_history (printer_name, layout_mode, paper_size, copies, invoice_count)
-                VALUES (?, ?, ?, ?, ?)
-            """, (printer_name, layout_mode, paper_size, copies, invoice_count))
-    
-    def get_recent_exports(self, limit: int = 10) -> List[Dict]:
-        """获取最近导出记录"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM export_history ORDER BY created_at DESC LIMIT ?
-            """, (limit,))
-            return [dict(row) for row in cursor.fetchall()]
+        conn.commit()
+        conn.close()
+        return deleted
+
+
+# 全局数据库实例
+_db_instance = None
+
+def get_db() -> InvoiceDatabase:
+    """获取数据库单例实例"""
+    global _db_instance
+    if _db_instance is None:
+        _db_instance = InvoiceDatabase()
+    return _db_instance

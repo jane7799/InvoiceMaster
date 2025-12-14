@@ -30,7 +30,7 @@ class LicenseManager:
                     # 获取主板序列号
                     output = subprocess.check_output("wmic csproduct get uuid", shell=True).decode()
                     uuid_str = output.split('\n')[1].strip()
-                except:
+                except Exception:
                     uuid_str = str(uuid.getnode())
                 
                 computer_name = platform.node()
@@ -47,7 +47,7 @@ class LicenseManager:
                         if 'IOPlatformUUID' in line:
                             uuid_str = line.split('"')[3]
                             return uuid_str
-                except:
+                except Exception:
                     pass
                 # 备用方案：MAC地址
                 return str(uuid.getnode())
@@ -57,11 +57,11 @@ class LicenseManager:
                 try:
                     with open('/etc/machine-id', 'r') as f:
                         return f.read().strip()
-                except:
+                except Exception:
                     try:
                         with open('/var/lib/dbus/machine-id', 'r') as f:
                             return f.read().strip()
-                    except:
+                    except Exception:
                         # 备用方案：MAC地址
                         return str(uuid.getnode())
         
