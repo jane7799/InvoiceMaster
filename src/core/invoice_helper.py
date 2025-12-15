@@ -974,29 +974,31 @@ class InvoiceHelper:
             
             # 税号（统一社会信用代码）
             # [V3.6.4 修复] 使用上下文关键词准确匹配税号，避免顺序错误
-            # 发票格式：购买方信息在上/左，销售方信息在下/右
+            # 发票格式：购买方信息在上/左，销售方信息在下/右（或底部，如保险发票）
             # 需要根据"购买方"/"销售方"关键词附近的税号来判断归属
             
-            # 方法1：基于上下文匹配（优先）
-            # 匹配"购买方"区块中的税号
-            m_buyer_tax = re.search(r'购\s*买\s*方[^销]{0,200}?([A-Za-z0-9]{15,18})', text, re.DOTALL)
-            if m_buyer_tax:
-                result["buyer_tax_id"] = m_buyer_tax.group(1)
+            # 方法1：精确匹配"纳税人识别号"行（最可靠）
+            # 格式：购买方 纳税人识别号: Y1110000743300020W 或 销售方 纳税人识别号: 91110102746719230N
+            # 注意：有的发票"购买方"/"销售方"是竖着排列在左边的，所以用宽松匹配
+            m_buyer_tax_exact = re.search(r'购\s*买?\s*方[^销售纳税人识别号]{0,30}?纳\s*税\s*人\s*识\s*别\s*号[：:\s]*([A-Za-z0-9]{15,20})', text, re.DOTALL)
+            if m_buyer_tax_exact:
+                result["buyer_tax_id"] = m_buyer_tax_exact.group(1)
             
-            # 匹配"销售方"区块中的税号
-            m_seller_tax = re.search(r'销\s*售\s*方[^购]{0,200}?([A-Za-z0-9]{15,18})', text, re.DOTALL)
-            if m_seller_tax:
-                result["seller_tax_id"] = m_seller_tax.group(1)
+            m_seller_tax_exact = re.search(r'销\s*售?\s*方[^购买纳税人识别号]{0,30}?纳\s*税\s*人\s*识\s*别\s*号[：:\s]*([A-Za-z0-9]{15,20})', text, re.DOTALL)
+            if m_seller_tax_exact:
+                result["seller_tax_id"] = m_seller_tax_exact.group(1)
             
-            # 方法2：如果上下文匹配失败，使用"纳税人识别号"标记
-            if not result["buyer_tax_id"] or not result["seller_tax_id"]:
-                # 查找所有"纳税人识别号"或"统一社会信用代码"后的税号
-                tax_patterns = re.findall(r'(购买方|销售方)?[^A-Za-z0-9]{0,50}?(?:纳税人识别号|统一社会信用代码|税\s*号)[：:\s]*([A-Za-z0-9]{15,18})', text, re.DOTALL)
-                for label, tax_id in tax_patterns:
-                    if label and '购' in label and not result["buyer_tax_id"]:
-                        result["buyer_tax_id"] = tax_id
-                    elif label and '销' in label and not result["seller_tax_id"]:
-                        result["seller_tax_id"] = tax_id
+            # 方法2：如果精确匹配失败，使用区块匹配（200字符范围内）
+            if not result["buyer_tax_id"]:
+                m_buyer_tax = re.search(r'购\s*买\s*方[^销]{0,200}?([A-Za-z0-9]{15,18})', text, re.DOTALL)
+                if m_buyer_tax:
+                    result["buyer_tax_id"] = m_buyer_tax.group(1)
+            
+            if not result["seller_tax_id"]:
+                # 销售方可能在底部（保险发票格式），扩大搜索范围
+                m_seller_tax = re.search(r'销\s*售?\s*方[^购]{0,300}?([A-Za-z0-9]{15,18})', text, re.DOTALL)
+                if m_seller_tax:
+                    result["seller_tax_id"] = m_seller_tax.group(1)
             
             # 方法3：兜底 - 如果仍然没有，按文本出现顺序（传统格式购买方在前）
             if not result["buyer_tax_id"] or not result["seller_tax_id"]:
