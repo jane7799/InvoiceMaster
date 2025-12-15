@@ -7,13 +7,14 @@ from PyQt6.QtCore import Qt
 from src.core.database import get_db
 
 class StatisticsDialog(QDialog):
-    """统计报表对话框"""
+    """统计报表对话框（显示当前导入的发票）"""
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, current_data=None):
         super().__init__(parent)
         self.setWindowTitle("统计报表")
         self.setMinimumSize(600, 500)
         self.setModal(True)
+        self.current_data = current_data or []  # 当前会话数据
         
         self._setup_ui()
         self._load_statistics()
@@ -149,26 +150,62 @@ class StatisticsDialog(QDialog):
         return table
         
     def _load_statistics(self):
-        """加载统计数据"""
-        stats = get_db().get_statistics()
+        """加载统计数据（基于当前导入的发票）"""
+        # 从当前数据计算统计
+        ignored_types = ["发票清单", "非发票凭证"]
         
-        # 更新卡片（直接使用保存的标签引用，避免 findChild 不可靠问题）
-        self.total_count_value.setText(f"{stats.get('total_count', 0)} 张")
-        self.total_amount_value.setText(f"¥{stats.get('total_amount', 0):,.2f}")
-        self.total_tax_value.setText(f"¥{stats.get('total_tax', 0):,.2f}")
+        total_count = 0
+        total_amount = 0.0
+        total_tax = 0.0
+        by_type = {}  # type -> {count, amount}
+        by_month = {}  # month -> {count, amount}
         
-        # 更新类型表
-        by_type = stats.get("by_type", [])
-        self.type_table.setRowCount(len(by_type))
-        for i, item in enumerate(by_type):
-            self.type_table.setItem(i, 0, QTableWidgetItem(str(item["type"])))
-            self.type_table.setItem(i, 1, QTableWidgetItem(f"{item['count']} 张"))
-            self.type_table.setItem(i, 2, QTableWidgetItem(f"¥{item['amount']:,.2f}"))
+        for d in self.current_data:
+            ext = d.get("ext", {})
+            inv_type = ext.get("invoice_type", "") or "未分类"
             
-        # 更新月份表
-        by_month = stats.get("by_month", [])
-        self.month_table.setRowCount(len(by_month))
-        for i, item in enumerate(by_month):
-            self.month_table.setItem(i, 0, QTableWidgetItem(str(item["month"])))
-            self.month_table.setItem(i, 1, QTableWidgetItem(f"{item['count']} 张"))
-            self.month_table.setItem(i, 2, QTableWidgetItem(f"¥{item['amount']:,.2f}"))
+            # 排除清单和非发票凭证
+            if inv_type in ignored_types or "非发票" in inv_type:
+                continue
+            
+            amount = d.get("a", 0) or 0
+            tax_amt = float(ext.get("tax_amt", 0) or 0)
+            date = d.get("d", "") or ""
+            month = date[:7] if len(date) >= 7 else "未知"
+            
+            total_count += 1
+            total_amount += amount
+            total_tax += tax_amt
+            
+            # 按类型统计
+            if inv_type not in by_type:
+                by_type[inv_type] = {"count": 0, "amount": 0.0}
+            by_type[inv_type]["count"] += 1
+            by_type[inv_type]["amount"] += amount
+            
+            # 按月份统计
+            if month not in by_month:
+                by_month[month] = {"count": 0, "amount": 0.0}
+            by_month[month]["count"] += 1
+            by_month[month]["amount"] += amount
+        
+        # 更新卡片
+        self.total_count_value.setText(f"{total_count} 张")
+        self.total_amount_value.setText(f"¥{total_amount:,.2f}")
+        self.total_tax_value.setText(f"¥{total_tax:,.2f}")
+        
+        # 更新类型表（按金额排序）
+        type_list = sorted(by_type.items(), key=lambda x: x[1]["amount"], reverse=True)
+        self.type_table.setRowCount(len(type_list))
+        for i, (t, data) in enumerate(type_list):
+            self.type_table.setItem(i, 0, QTableWidgetItem(t))
+            self.type_table.setItem(i, 1, QTableWidgetItem(f"{data['count']} 张"))
+            self.type_table.setItem(i, 2, QTableWidgetItem(f"¥{data['amount']:,.2f}"))
+            
+        # 更新月份表（按月份排序）
+        month_list = sorted(by_month.items(), key=lambda x: x[0], reverse=True)
+        self.month_table.setRowCount(len(month_list))
+        for i, (m, data) in enumerate(month_list):
+            self.month_table.setItem(i, 0, QTableWidgetItem(m))
+            self.month_table.setItem(i, 1, QTableWidgetItem(f"{data['count']} 张"))
+            self.month_table.setItem(i, 2, QTableWidgetItem(f"¥{data['amount']:,.2f}"))

@@ -149,7 +149,7 @@ class MainWindow(QMainWindow):
                 background: #059669;
             }}
         """)
-        self.btn_stats.clicked.connect(lambda: StatisticsDialog(self).exec())
+        self.btn_stats.clicked.connect(lambda: StatisticsDialog(self, self.data).exec())
         
         tb.addWidget(self.btn_set); tb.addWidget(self.btn_stats); tb.addStretch(); tb.addWidget(self.btn_del)
         
