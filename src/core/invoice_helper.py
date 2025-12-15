@@ -940,26 +940,46 @@ class InvoiceHelper:
                 result["date"] = f"{m_date.group(1)}-{m_date.group(2).zfill(2)}-{m_date.group(3).zfill(2)}"
             
             # === 4. 发票号码/代码 ===
+            # [V3.6.5] 增强匹配，允许关键词和数字之间有更多字符
             # 全电发票20位
-            m_num20 = re.search(r'发票号[码]?[：:]*\s*(\d{20})', text)
+            m_num20 = re.search(r'发票号[码]?[：:\s]*(\d{20})', text)
             if m_num20:
                 result["number"] = m_num20.group(1)
             else:
-                # 传统发票8位
-                m_num8 = re.search(r'发票号[码]?[：:]*\s*(\d{8})\b', text)
+                # 传统发票8位 - 多种匹配模式
+                m_num8 = re.search(r'发票号[码]?[：:\s]*(\d{8})\b', text)
                 if m_num8:
                     result["number"] = m_num8.group(1)
+                else:
+                    # 回退：直接匹配8位数字（排除年份开头的日期）
+                    nums = re.findall(r'(?<!\d)(\d{8})(?!\d)', text)
+                    nums = [n for n in nums if not n.startswith('202') and not n.startswith('201')]
+                    if nums:
+                        result["number"] = nums[0]
             
             # 发票代码（10-12位）
             if not m_num20:  # 全电发票没有代码
-                m_code = re.search(r'发票代码[：:]*\s*(\d{10,12})', text)
+                m_code = re.search(r'发票代码[：:\s]*(\d{10,12})', text)
                 if m_code:
                     result["code"] = m_code.group(1)
+                else:
+                    # 回退：直接匹配10-12位数字
+                    codes = re.findall(r'(?<!\d)(\d{10,12})(?!\d)', text)
+                    codes = [c for c in codes if c != result.get("number")]
+                    if codes:
+                        result["code"] = codes[0]
             
             # === 5. 校验码 ===
             m_check = re.search(r'校验码[：:\s]*(\d{20}|\d{6})', text)
             if m_check:
                 result["check_code"] = m_check.group(1)
+            else:
+                # 回退：匹配20位或后6位校验码
+                checks = re.findall(r'(?<!\d)(\d{20})(?!\d)', text)
+                # 排除发票号码
+                checks = [c for c in checks if c != result.get("number")]
+                if checks:
+                    result["check_code"] = checks[0]
             
             # === 6. 购买方/销售方信息 ===
             # 购买方名称
@@ -978,7 +998,6 @@ class InvoiceHelper:
             # 需要根据"购买方"/"销售方"关键词附近的税号来判断归属
             
             # 方法1：精确匹配"纳税人识别号"行（最可靠）
-            # 格式：购买方 纳税人识别号: Y1110000743300020W 或 销售方 纳税人识别号: 91110102746719230N
             # 注意：有的发票"购买方"/"销售方"是竖着排列在左边的，所以用宽松匹配
             m_buyer_tax_exact = re.search(r'购\s*买?\s*方[^销售纳税人识别号]{0,30}?纳\s*税\s*人\s*识\s*别\s*号[：:\s]*([A-Za-z0-9]{15,20})', text, re.DOTALL)
             if m_buyer_tax_exact:
