@@ -119,12 +119,129 @@ class InvoiceHelper:
         except: return Icons.get("file", "#ccc").pixmap(100,100)
     
     @staticmethod
+    def preprocess_image_for_ocr(img, for_qrcode=False):
+        """图像预处理，提高OCR和二维码识别准确率
+        
+        预处理步骤：
+        1. 灰度转换
+        2. 去噪（高斯模糊 + 非局部均值去噪）
+        3. 自适应二值化（增强对比度）
+        4. 可选的倾斜校正
+        
+        Args:
+            img: OpenCV 格式的图像 (BGR)
+            for_qrcode: 是否针对二维码优化（二维码需要更强的二值化）
+            
+        Returns:
+            预处理后的图像
+        """
+        if img is None:
+            return None
+        
+        try:
+            # 1. 转换为灰度图
+            if len(img.shape) == 3:
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = img.copy()
+            
+            # 2. 去噪处理
+            # 先用轻微高斯模糊减少椒盐噪声
+            blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+            
+            # 使用非局部均值去噪（效果更好但稍慢）
+            try:
+                denoised = cv2.fastNlMeansDenoising(blurred, None, h=10, templateWindowSize=7, searchWindowSize=21)
+            except Exception:
+                # 如果去噪失败，使用原图
+                denoised = blurred
+            
+            # 3. 自适应二值化
+            if for_qrcode:
+                # 二维码需要更强的二值化
+                # 使用自适应阈值，适应不同区域的光照
+                binary = cv2.adaptiveThreshold(
+                    denoised, 255, 
+                    cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                    cv2.THRESH_BINARY, 
+                    blockSize=11,  # 邻域大小
+                    C=2  # 常数
+                )
+            else:
+                # 普通OCR使用OTSU自动阈值
+                _, binary = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+            # 4. 倾斜校正（可选，对扫描件特别有用）
+            binary = InvoiceHelper._deskew_image(binary)
+            
+            return binary
+            
+        except Exception:
+            # 如果预处理失败，返回原图
+            return img
+    
+    @staticmethod
+    def _deskew_image(img, max_angle=5):
+        """倾斜校正（仅校正小角度倾斜）
+        
+        Args:
+            img: 灰度或二值图像
+            max_angle: 最大校正角度（度），超过此角度不校正
+            
+        Returns:
+            校正后的图像
+        """
+        try:
+            # 使用霍夫变换检测直线
+            edges = cv2.Canny(img, 50, 150, apertureSize=3)
+            lines = cv2.HoughLines(edges, 1, 3.14159265/180, 200)
+            
+            if lines is None or len(lines) == 0:
+                return img
+            
+            # 计算主要倾斜角度
+            angles = []
+            for line in lines[:20]:  # 只取前20条线
+                rho, theta = line[0]
+                # 转换为度数，范围 -90 到 90
+                angle = (theta * 180 / 3.14159265) - 90
+                if abs(angle) < max_angle:  # 只考虑小角度
+                    angles.append(angle)
+            
+            if not angles:
+                return img
+            
+            # 取中位数角度
+            angles.sort()
+            median_angle = angles[len(angles) // 2]
+            
+            # 如果角度太小，不校正
+            if abs(median_angle) < 0.5:
+                return img
+            
+            # 旋转校正
+            h, w = img.shape[:2]
+            center = (w // 2, h // 2)
+            rotation_matrix = cv2.getRotationMatrix2D(center, median_angle, 1.0)
+            rotated = cv2.warpAffine(img, rotation_matrix, (w, h), 
+                                      flags=cv2.INTER_CUBIC, 
+                                      borderMode=cv2.BORDER_REPLICATE)
+            return rotated
+            
+        except Exception:
+            return img
+    
     def scan_invoice_qrcode(file_path):
         """扫描发票二维码获取结构化数据
         
         支持两种格式：
         1. 标准格式：01,10,发票代码,发票号码,金额,日期,校验码,...
         2. 全电发票格式：包含"合计金额 ¥100（含税）"或"合计金额 ¥100（未含税）"
+        
+        [V3.6 增强] 使用图像预处理提高识别率：
+        - 灰度转换 + 自适应二值化
+        - 高斯去噪
+        - 倾斜校正
         
         返回解析后的字典，如果扫描失败返回None
         """
@@ -148,7 +265,34 @@ class InvoiceHelper:
                     if img is None:
                         return None
                     
+                    # [V3.6] 尝试多种方式扫描二维码
+                    # 方式1：直接扫描原图
                     barcodes = decode_qr(img)
+                    
+                    # 方式2：如果原图失败，使用预处理后的图像
+                    if not barcodes:
+                        processed_img = InvoiceHelper.preprocess_image_for_ocr(img, for_qrcode=True)
+                        if processed_img is not None:
+                            barcodes = decode_qr(processed_img)
+                    
+                    # 方式3：如果还是失败，尝试更高分辨率
+                    if not barcodes:
+                        # 重新获取更高分辨率的页面
+                        pix_hd = page.get_pixmap(matrix=fitz.Matrix(3, 3))  # 3倍放大
+                        img_hd_data = pix_hd.tobytes("png")
+                        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_hd:
+                            tmp_hd.write(img_hd_data)
+                            tmp_hd_path = tmp_hd.name
+                        try:
+                            img_hd = cv2.imread(tmp_hd_path)
+                            if img_hd is not None:
+                                processed_hd = InvoiceHelper.preprocess_image_for_ocr(img_hd, for_qrcode=True)
+                                if processed_hd is not None:
+                                    barcodes = decode_qr(processed_hd)
+                        finally:
+                            os.unlink(tmp_hd_path)
+                    
+                    # 解析二维码内容
                     for barcode in barcodes:
                         data = barcode.data.decode("utf-8")
                         
