@@ -39,14 +39,15 @@ class InvoiceHelper:
             return None
         
         try:
-            # 提取金额大写部分 (支持多种格式)
-            # 格式1: 金额（大写）: 壹佰元整
-            # 格式2: 大写：壹佰元整
-            # 格式3: 直接匹配中文大写
-            m = re.search(r'[金额大写（）:：\s]*([\u96f6\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u62fe\u4f70\u4edf\u4e07\u4ebf\u5341\u767e\u5343\u5143\u89d2\u5206\u6574]+)', text)
-            if not m:
-                # 直接尝试匹配连续的中文大写数字
-                m = re.search(r'([\u96f6\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u62fe\u4f70\u4edf\u4e07\u4ebf\u5341\u767e\u5343]+[\u5143\u89d2\u5206\u6574]*)', text)
+            # 核心改进：必须包含"元"或"角"或"分"或"整"才算有效金额
+            # 匹配模式：[数字单位]+元[数字]角[数字]分 或 [数字单位]+元整
+            # 中文大写数字: 零壹贰叁肆伍陆柒捌玖 一二三四五六七八九
+            # 单位: 拾佰仟万亿 十百千
+            # 货币: 元角分整
+            
+            # 优先匹配完整格式：XXX元XXX角XXX分 或 XXX元整
+            pattern = r'([\u96f6\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u62fe\u4f70\u4edf\u4e07\u4ebf\u5341\u767e\u5343]+\u5143[\u96f6\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u89d2\u5206\u6574]*)'
+            m = re.search(pattern, text)
             
             if not m:
                 return None
