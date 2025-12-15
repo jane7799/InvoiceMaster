@@ -1,0 +1,45 @@
+name: Build Invoice App (Windows 7 Only)
+
+on:
+  workflow_dispatch:  # 仅手动触发
+
+jobs:
+  # ==================================================
+  # Windows 7 专用版 (含图片资源 + 旧版依赖 + OpenCV)
+  # ==================================================
+  build-win7-legacy:
+    name: Build for Windows 7
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+          architecture: 'x64'
+          
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          # 【关键】锁定 PyMuPDF 版本以防报错
+          pip install pdfplumber pandas requests openpyxl pymupdf==1.23.26
+          # 【关键】锁定 PyQt6 版本以支持 Win7
+          pip install PyQt6==6.1.0 PyQt6-Qt6==6.1.0 PyQt6-sip==13.1.0
+          # 【修复 cv2 报错】安装 OpenCV 和 pyzbar
+          pip install opencv-python-headless pyzbar
+          pip uninstall -y pathlib || true
+          
+      - name: Build Win7 EXE
+        run: |
+          python -m pip uninstall -y pathlib || true
+          # 【关键】--add-data 把二维码打包进去 (Windows用分号;)
+          # 【关键】--hidden-import 添加 cv2 和 pyzbar 以修复 ModuleNotFoundError
+          python -m PyInstaller --name "智能发票管理助手_Win7兼容版" --windowed --onefile --clean --noconfirm --icon="logo.ico" --add-data "qr1.jpg;." --add-data "qr2.jpg;." --add-data "icon_1x1_l.png;." --add-data "icon_1x1_p.png;." --add-data "icon_1x2_l.png;." --add-data "icon_1x2_p.png;." --add-data "icon_2x2_l.png;." --add-data "icon_2x2_p.png;." --hidden-import=cv2 --hidden-import=pyzbar --hidden-import=pyzbar.pyzbar InvoiceMaster.py
+          
+      - name: Upload Win7 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartInvoice_For_Win7
+          path: dist/智能发票管理助手_Win7兼容版.exe

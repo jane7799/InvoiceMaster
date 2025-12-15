@@ -1,0 +1,140 @@
+name: Build Invoice App All Versions
+
+on:
+  workflow_dispatch:  # 仅手动触发，避免每次推送都自动构建
+
+jobs:
+  # ==================================================
+  # 任务 1: Windows 7 专用版 (含图片资源 + 旧版依赖)
+  # ==================================================
+  build-win7-legacy:
+    name: Build for Windows 7
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+          architecture: 'x64'
+          
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          # 【关键】锁定 PyMuPDF 版本以防报错
+          pip install pdfplumber pandas requests openpyxl pymupdf==1.23.26
+          # 【关键】锁定 PyQt6 版本以支持 Win7
+          pip install PyQt6==6.1.0 PyQt6-Qt6==6.1.0 PyQt6-sip==13.1.0
+          pip uninstall -y pathlib || true
+          
+      - name: Build Win7 EXE
+        run: |
+          python -m pip uninstall -y pathlib || true
+          # 【关键】--add-data 把二维码打包进去 (Windows用分号;)
+          python -m PyInstaller --name "智能发票管理助手_Win7兼容版" --windowed --onefile --clean --noconfirm --icon="logo.ico" --add-data "qr1.jpg;." --add-data "qr2.jpg;." --add-data "icon_1x1_l.png;." --add-data "icon_1x1_p.png;." --add-data "icon_1x2_l.png;." --add-data "icon_1x2_p.png;." --add-data "icon_2x2_l.png;." --add-data "icon_2x2_p.png;." InvoiceMaster.py
+          
+      - name: Upload Win7 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartInvoice_For_Win7
+          path: dist/智能发票管理助手_Win7兼容版.exe
+
+  # ==================================================
+  # 任务 2: Windows 10/11 现代版
+  # ==================================================
+  build-win10-modern:
+    name: Build for Windows 10/11
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+          # 强制覆盖安装稳定的 PyMuPDF
+          pip install pymupdf==1.23.26
+          
+      - name: Build Win10 EXE
+        run: |
+          # Windows 用分号 ;
+          python -m PyInstaller --name "智能发票管理助手_Win10现代版" --windowed --onefile --clean --noconfirm --icon="logo.ico" --add-data "qr1.jpg;." --add-data "qr2.jpg;." --add-data "icon_1x1_l.png;." --add-data "icon_1x1_p.png;." --add-data "icon_1x2_l.png;." --add-data "icon_1x2_p.png;." --add-data "icon_2x2_l.png;." --add-data "icon_2x2_p.png;." InvoiceMaster.py
+      - name: Upload Win10 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartInvoice_For_Win10_11
+          path: dist/智能发票管理助手_Win10现代版.exe
+
+  # ==================================================
+  # 任务 3: macOS 版本
+  # ==================================================
+  build-macos:
+    name: Build for macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+          pip install pymupdf==1.23.26
+          
+      - name: Build Mac App
+        run: |
+          # Mac 用冒号 :
+          python -m PyInstaller --name "智能发票管理助手_Mac版" --windowed --clean --noconfirm --icon="logo.icns" --add-data "qr1.jpg:." --add-data "qr2.jpg:." --add-data "icon_1x1_l.png:." --add-data "icon_1x1_p.png:." --add-data "icon_1x2_l.png:." --add-data "icon_1x2_p.png:." --add-data "icon_2x2_l.png:." --add-data "icon_2x2_p.png:." InvoiceMaster.py
+      - name: Upload Mac Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartInvoice_For_Mac
+          path: dist/智能发票管理助手_Mac版*
+
+  # ==================================================
+  # 任务 4: Linux/UOS 版本
+  # ==================================================
+  build-linux-uos:
+    name: Build for Linux/UOS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          # libzbar-dev: 用于 pyzbar 二维码扫描
+          # libxcb-cursor0: 修复 Qt 光标问题
+          # 注意：PyQt6 通过 pip 安装，不使用系统包（兼容性更好）
+          sudo apt-get install -y libzbar-dev libxcb-cursor0
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+          pip install pymupdf==1.23.26
+          
+      - name: Build Linux Binary
+        run: |
+          # Linux 用冒号 :
+          python -m PyInstaller --name "智能发票管理助手_Linux版" --onefile --clean --noconfirm --add-data "qr1.jpg:." --add-data "qr2.jpg:." --add-data "icon_1x1_l.png:." --add-data "icon_1x1_p.png:." --add-data "icon_1x2_l.png:." --add-data "icon_1x2_p.png:." --add-data "icon_2x2_l.png:." --add-data "icon_2x2_p.png:." InvoiceMaster.py
+          
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartInvoice_For_Linux_UOS
+          path: dist/智能发票管理助手_Linux版
