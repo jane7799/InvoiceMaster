@@ -650,6 +650,154 @@ class InvoiceHelper:
         return result
 
     @staticmethod
+    def parse_vat_invoice(text):
+        """专门解析增值税发票（普通发票、专用发票）
+        
+        增值税发票特点：
+        - 有"价税合计（大写）"和"（小写）¥xxx.xx"两个金额
+        - "合计"是不含税金额，"价税合计"才是含税总金额
+        - 有购买方、销售方信息和税号
+        - 有规格型号、单位、数量等商品明细
+        
+        返回与OCR接口一致的字典格式。
+        """
+        result = {
+            "date": "",
+            "amount": 0.0,
+            "amount_without_tax": "",
+            "tax_amt": "",
+            "tax_rate": "",
+            "seller": "",
+            "seller_tax_id": "",
+            "buyer": "",
+            "buyer_tax_id": "",
+            "code": "",
+            "number": "",
+            "check_code": "",
+            "invoice_type": "",
+            "item_name": "",
+            "remark": "",
+            "machine_code": "",
+            "_local_parsed": True,
+        }
+        
+        try:
+            # === 1. 识别发票类型 ===
+            if "专用发票" in text:
+                result["invoice_type"] = "增值税专用发票"
+            elif "普通发票" in text:
+                result["invoice_type"] = "增值税普通发票"
+            elif "电子发票" in text:
+                result["invoice_type"] = "增值税电子普通发票"
+            else:
+                result["invoice_type"] = "增值税发票"
+            
+            # === 2. 金额提取（核心逻辑）===
+            # 增值税发票关键点：必须区分"合计"和"价税合计"
+            # - "合计" = 不含税金额（金额列的合计）
+            # - "价税合计" 或 "（小写）" = 含税总金额（我们要的）
+            
+            # 方法1：匹配"（小写）¥22.50"格式（最可靠）
+            m_xiaoxie = re.search(r'[（\(]\s*小写\s*[）\)]\s*[¥￥]\s*([0-9,，]+\.\d{2})', text)
+            if m_xiaoxie:
+                result["amount"] = float(m_xiaoxie.group(1).replace(",", "").replace("，", ""))
+            
+            # 方法2：匹配"小写）¥22.50"格式（括号可能缺失）
+            if result["amount"] == 0:
+                m_xiaoxie2 = re.search(r'小写[）\)]\s*[¥￥]\s*([0-9,，]+\.\d{2})', text)
+                if m_xiaoxie2:
+                    result["amount"] = float(m_xiaoxie2.group(1).replace(",", "").replace("，", ""))
+            
+            # 方法3：匹配"价税合计"后的金额
+            if result["amount"] == 0:
+                m_total = re.search(r'价税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*([0-9,，]+\.\d{2})', text)
+                if m_total:
+                    result["amount"] = float(m_total.group(1).replace(",", "").replace("，", ""))
+            
+            # 方法4：如果以上都失败，找所有¥符号后的金额，取最大的
+            if result["amount"] == 0:
+                amounts = re.findall(r'[¥￥]\s*([0-9,，]+\.\d{2})', text)
+                if amounts:
+                    valid = [float(x.replace(",", "").replace("，", "")) for x in amounts]
+                    # 过滤掉极大值和极小值
+                    valid = [x for x in valid if 0.01 < x < 100000000]
+                    if valid:
+                        result["amount"] = max(valid)
+            
+            # 提取不含税金额（"合计"行，不是"价税合计"）
+            m_without_tax = re.search(r'(?<!价税)\s*合\s*计[^价税0-9¥￥]*[¥￥]?\s*([0-9,，]+\.\d{2})', text)
+            if m_without_tax:
+                result["amount_without_tax"] = m_without_tax.group(1).replace(",", "").replace("，", "")
+            
+            # 提取税额
+            m_tax = re.search(r'税\s*额[^0-9¥￥]*[¥￥]?\s*([0-9,，]+\.\d{2})', text)
+            if m_tax:
+                result["tax_amt"] = m_tax.group(1).replace(",", "").replace("，", "")
+            
+            # === 3. 日期提取 ===
+            m_date = re.search(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', text)
+            if m_date:
+                result["date"] = f"{m_date.group(1)}-{m_date.group(2).zfill(2)}-{m_date.group(3).zfill(2)}"
+            
+            # === 4. 发票号码/代码 ===
+            # 全电发票20位
+            m_num20 = re.search(r'发票号[码]?[：:]*\s*(\d{20})', text)
+            if m_num20:
+                result["number"] = m_num20.group(1)
+            else:
+                # 传统发票8位
+                m_num8 = re.search(r'发票号[码]?[：:]*\s*(\d{8})\b', text)
+                if m_num8:
+                    result["number"] = m_num8.group(1)
+            
+            # 发票代码（10-12位）
+            if not m_num20:  # 全电发票没有代码
+                m_code = re.search(r'发票代码[：:]*\s*(\d{10,12})', text)
+                if m_code:
+                    result["code"] = m_code.group(1)
+            
+            # === 5. 校验码 ===
+            m_check = re.search(r'校验码[：:\s]*(\d{20}|\d{6})', text)
+            if m_check:
+                result["check_code"] = m_check.group(1)
+            
+            # === 6. 购买方/销售方信息 ===
+            # 购买方名称
+            m_buyer = re.search(r'购\s*买\s*方.*?名\s*称[：:]\s*([^\n\r]{5,50})', text)
+            if m_buyer:
+                result["buyer"] = m_buyer.group(1).strip()
+            
+            # 销售方名称
+            m_seller = re.search(r'销\s*售\s*方.*?名\s*称[：:]\s*([^\n\r]{5,50})', text)
+            if m_seller:
+                result["seller"] = m_seller.group(1).strip()
+            
+            # 税号（统一社会信用代码）
+            tax_ids = re.findall(r'([A-Za-z0-9]{15,20})', text)
+            if len(tax_ids) >= 2:
+                result["buyer_tax_id"] = tax_ids[0]
+                result["seller_tax_id"] = tax_ids[1]
+            elif len(tax_ids) == 1:
+                result["buyer_tax_id"] = tax_ids[0]
+            
+            # === 7. 商品名称 ===
+            # 匹配 *类别*商品名 格式
+            m_item = re.search(r'(\*[\u4e00-\u9fa5]+\*[^\n\r\s]+)', text)
+            if m_item:
+                result["item_name"] = m_item.group(1).strip()
+            
+            # === 8. 税率 ===
+            rates = re.findall(r'(\d{1,2})%', text)
+            common_rates = [r for r in rates if r in ['0', '1', '3', '5', '6', '9', '13']]
+            if common_rates:
+                result["tax_rate"] = common_rates[0] + "%"
+            
+        except Exception:
+            pass
+        
+        return result
+
+    @staticmethod
     def parse_invoice_local(file_path):
         """本地解析发票完整信息（适用于矢量PDF）
         
@@ -873,6 +1021,21 @@ class InvoiceHelper:
                         # 之前的逻辑只在 result 没有值时才赋值，导致错误的二维码解析结果无法被覆盖
                         for k, v in fiscal_result.items():
                             if v:  # 只要财政解析器有值，就覆盖
+                                result[k] = v
+                        return result
+
+                # [V3.6 新增] 检测增值税发票（普通发票、专用发票）
+                # 增值税发票有特殊的金额格式："合计"是不含税，"价税合计"才是含税
+                is_vat_invoice = ('增值税' in full_raw_text or '普通发票' in full_raw_text or 
+                                  '专用发票' in full_raw_text or '电子发票' in full_raw_text or
+                                  '价税合计' in full_raw_text)
+                
+                if is_vat_invoice:
+                    vat_result = InvoiceHelper.parse_vat_invoice(full_raw_text)
+                    if vat_result and vat_result.get('amount', 0) > 0:
+                        # 增值税发票解析器的结果覆盖通用解析
+                        for k, v in vat_result.items():
+                            if v:
                                 result[k] = v
                         return result
 
