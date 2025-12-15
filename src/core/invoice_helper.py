@@ -898,6 +898,19 @@ class InvoiceHelper:
                     elif valid:
                         result["amount"] = max(valid)
             
+            # [V3.6.2] 大写金额验证和补充
+            # 解析"价税合计（大写）"后的中文金额，如"陆拾伍元伍角贰分" = 65.52
+            cn_amount = InvoiceHelper.parse_chinese_amount(text)
+            if cn_amount and cn_amount > 0:
+                current_amount = result.get("amount", 0)
+                if current_amount == 0:
+                    # 没有找到金额，使用大写金额
+                    result["amount"] = cn_amount
+                elif abs(cn_amount - current_amount) > 0.01:
+                    # 大写金额与当前金额不一致，通常大写更可靠
+                    # 选择较大的那个（价税合计应该是最大的）
+                    result["amount"] = max(cn_amount, current_amount)
+            
             # 提取不含税金额（"合计"行，不是"价税合计"）
             m_without_tax = re.search(r'(?<!价税)\s*合\s*计[^价税0-9¥￥]*[¥￥]?\s*([0-9,，]+\.\d{2})', text)
             if m_without_tax:
@@ -1001,6 +1014,8 @@ class InvoiceHelper:
         # 首先尝试二维码扫描（最准确）
         qr_data = InvoiceHelper.scan_invoice_qrcode(file_path)
         qr_amount_is_tax_exclusive = False  # 标记二维码金额是否为未含税金额
+        qr_tax_exclusive_amount = 0.0  # 存储二维码的不含税金额，用于后续验证
+        
         if qr_data:
             result["code"] = qr_data.get("code", "")
             result["number"] = qr_data.get("number", "")
@@ -1011,9 +1026,10 @@ class InvoiceHelper:
             
             # 检查二维码是否明确标记为"未含税"金额
             if qr_data.get("_qr_has_tax_info") and qr_data.get("_qr_is_tax_inclusive") == False:
-                # 二维码明确标记为"未含税"，将金额存为不含税金额
+                # [V3.6.2] 二维码明确标记为"未含税"，存储用于后续验证
                 if qr_amount > 0:
                     result["amount_without_tax"] = str(qr_amount)
+                    qr_tax_exclusive_amount = qr_amount  # 记录不含税金额
                 qr_amount_is_tax_exclusive = True
                 # 后续会从文本中提取价税合计作为主金额
             else:
@@ -1226,7 +1242,11 @@ class InvoiceHelper:
                 if not result.get("number"):
                     m_num = re.search(r'(?<!\d)(\d{8}|0\d{8})(?!\d)', text) # 特例：有些号码前面带0
                     if m_num: result["number"] = m_num.group(1)
-                    
+                
+                # [V3.6.2] 检测PDF文本中是否包含"不含税"标记
+                # 如果有，需要特别小心，优先寻找"价税合计"
+                text_has_tax_exclusive = ("不含税" in full_raw_text or "未含税" in full_raw_text)
+                
                 if not result.get("amount") or result.get("amount") == 0 or qr_amount_is_tax_exclusive:
                     # [V3.6 修复] 增强金额识别，使用多种匹配模式处理不同PDF格式
                     # 优先匹配"价税合计"或"小写"后的金额（这是含税总金额）
@@ -1273,6 +1293,41 @@ class InvoiceHelper:
                                 except: pass
                             if valid_amounts:
                                 result["amount"] = max(valid_amounts)
+                
+                # [V3.6.2] 验证逻辑：当二维码识别到"不含税"金额时
+                # 本地解析的金额必须大于二维码金额才采用，否则弃用
+                if qr_amount_is_tax_exclusive and qr_tax_exclusive_amount > 0:
+                    local_amount = result.get("amount", 0)
+                    if local_amount > 0:
+                        if local_amount > qr_tax_exclusive_amount:
+                            # 本地金额 > 二维码不含税金额 → 应该是价税合计，采用
+                            pass  # 保持 result["amount"]
+                        elif abs(local_amount - qr_tax_exclusive_amount) < 0.01:
+                            # 本地金额 ≈ 二维码不含税金额 → 都是不含税，弃用本地
+                            result["amount"] = 0
+                        else:
+                            # 本地金额 < 二维码不含税金额 → 可能是税额或其他，弃用
+                            result["amount"] = 0
+                
+                # [V3.6.2] 如果二维码失败，但PDF文本中有"不含税"标记
+                # 需要验证当前金额是否确实是价税合计（应该是最大的¥金额）
+                elif text_has_tax_exclusive and result.get("amount", 0) > 0:
+                    # 找到所有¥金额
+                    all_amounts = re.findall(r'[¥￥]\s*([0-9,，.]+)', full_raw_text)
+                    if all_amounts:
+                        try:
+                            all_values = [float(x.replace(",", "").replace("，", "")) 
+                                         for x in all_amounts 
+                                         if 0.01 < float(x.replace(",", "").replace("，", "")) < 100000000]
+                            if all_values:
+                                max_amount = max(all_values)
+                                current_amount = result.get("amount", 0)
+                                # 如果当前金额不是最大的，说明可能取错了
+                                if current_amount < max_amount:
+                                    # 采用最大金额（应该是价税合计）
+                                    result["amount"] = max_amount
+                        except:
+                            pass
                 
                 # 尝试提取发票类型
                 if "增值税专用发票" in full_raw_text:
