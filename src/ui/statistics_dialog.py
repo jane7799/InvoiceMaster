@@ -32,9 +32,9 @@ class StatisticsDialog(QDialog):
         cards_layout = QHBoxLayout()
         cards_layout.setSpacing(15)
         
-        self.total_count_card = self._create_stat_card("总发票数", "0 张", "#3B82F6")
-        self.total_amount_card = self._create_stat_card("总金额", "¥0.00", "#10B981")
-        self.total_tax_card = self._create_stat_card("总税额", "¥0.00", "#F59E0B")
+        self.total_count_card, self.total_count_value = self._create_stat_card("总发票数", "0 张", "#3B82F6")
+        self.total_amount_card, self.total_amount_value = self._create_stat_card("总金额", "¥0.00", "#10B981")
+        self.total_tax_card, self.total_tax_value = self._create_stat_card("总税额", "¥0.00", "#F59E0B")
         
         cards_layout.addWidget(self.total_count_card)
         cards_layout.addWidget(self.total_amount_card)
@@ -90,7 +90,7 @@ class StatisticsDialog(QDialog):
         layout.addLayout(btn_layout)
         
     def _create_stat_card(self, title, value, color):
-        """创建统计卡片"""
+        """创建统计卡片，返回 (card, value_label) 元组"""
         card = QFrame()
         card.setStyleSheet(f"""
             QFrame {{
@@ -116,7 +116,8 @@ class StatisticsDialog(QDialog):
         lbl_value.setStyleSheet(f"color: {color}; font-size: 20px; font-weight: bold;")
         layout.addWidget(lbl_value)
         
-        return card
+        # 返回卡片和值标签，便于后续更新
+        return card, lbl_value
         
     def _create_table(self, headers):
         """创建统计表格"""
@@ -151,10 +152,10 @@ class StatisticsDialog(QDialog):
         """加载统计数据"""
         stats = get_db().get_statistics()
         
-        # 更新卡片
-        self.total_count_card.findChild(QLabel, "").nextInFocusChain().setText(f"{stats.get('total_count', 0)} 张")
-        self.total_amount_card.findChild(QLabel, "").nextInFocusChain().setText(f"¥{stats.get('total_amount', 0):,.2f}")
-        self.total_tax_card.findChild(QLabel, "").nextInFocusChain().setText(f"¥{stats.get('total_tax', 0):,.2f}")
+        # 更新卡片（直接使用保存的标签引用，避免 findChild 不可靠问题）
+        self.total_count_value.setText(f"{stats.get('total_count', 0)} 张")
+        self.total_amount_value.setText(f"¥{stats.get('total_amount', 0):,.2f}")
+        self.total_tax_value.setText(f"¥{stats.get('total_tax', 0):,.2f}")
         
         # 更新类型表
         by_type = stats.get("by_type", [])

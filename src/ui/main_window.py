@@ -544,19 +544,31 @@ class MainWindow(QMainWindow):
         """计算统计信息（仅计算有效发票，排除清单和非发票凭证）"""
         total_n = 0
         total_a = 0.0
+        unrecognized_n = 0  # 未识别数量
         
         ignored_types = ["发票清单", "非发票凭证"]
         
         for d in self.data:
-            inv_type = d.get("invoice_type", "")
+            # [修复] 从 ext 中读取 invoice_type（而非 d 直接读取）
+            inv_type = d.get("ext", {}).get("invoice_type", "")
             # 排除清单和非发票凭证
             if inv_type in ignored_types or "非发票" in inv_type:
                 continue
-                
-            total_n += 1
-            total_a += d.get("a", 0)
             
-        self.lbl_inf.setText(f"{total_n} 张发票")
+            # 统计未识别发票（金额为0或无日期）
+            amount = d.get("a", 0)
+            date = d.get("d", "")
+            if amount == 0 or not date:
+                unrecognized_n += 1
+            
+            total_n += 1
+            total_a += amount
+        
+        # 显示格式：已识别数量 + 未识别数量
+        if unrecognized_n > 0:
+            self.lbl_inf.setText(f"{total_n} 张发票，{unrecognized_n} 张未识别")
+        else:
+            self.lbl_inf.setText(f"{total_n} 张发票")
         self.lbl_tot.setText(f"¥ {total_a:,.2f}")
     def clear(self): self.list.clear(); self.data=[]; self.calc(); self.trigger_refresh()
     def ctx_menu(self, p): m=QMenu(); a=QAction("删除",self); a.triggered.connect(self.del_sel); m.addAction(a); m.exec(self.list.mapToGlobal(p))

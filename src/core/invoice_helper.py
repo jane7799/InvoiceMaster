@@ -14,6 +14,95 @@ except ImportError:
     _PYZBAR_AVAILABLE = False
 
 class InvoiceHelper:
+    # 中文大写数字映射
+    CN_NUM_MAP = {
+        '零': 0, '壹': 1, '贰': 2, '叁': 3, '肆': 4,
+        '伍': 5, '陆': 6, '柒': 7, '捌': 8, '玖': 9,
+        '〇': 0, '一': 1, '二': 2, '三': 3, '四': 4,
+        '五': 5, '六': 6, '七': 7, '八': 8, '九': 9,
+    }
+    CN_UNIT_MAP = {
+        '拾': 10, '佰': 100, '仟': 1000, '万': 10000, '亿': 100000000,
+        '十': 10, '百': 100, '千': 1000,
+    }
+    
+    @staticmethod
+    def parse_chinese_amount(text):
+        """解析中文大写金额（如：壹佰贰拾叁元肆角伍分）
+        
+        返回浮点数金额，解析失败返回 None
+        """
+        if not text or not isinstance(text, str):
+            return None
+        
+        try:
+            # 提取金额大写部分 (支持多种格式)
+            # 格式1: 金额（大写）: 壹佰元整
+            # 格式2: 大写：壹佰元整
+            # 格式3: 直接匹配中文大写
+            m = re.search(r'[金额大写（）:：\s]*([\u96f6\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u62fe\u4f70\u4edf\u4e07\u4ebf\u5341\u767e\u5343\u5143\u89d2\u5206\u6574]+)', text)
+            if not m:
+                # 直接尝试匹配连续的中文大写数字
+                m = re.search(r'([\u96f6\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u62fe\u4f70\u4edf\u4e07\u4ebf\u5341\u767e\u5343]+[\u5143\u89d2\u5206\u6574]*)', text)
+            
+            if not m:
+                return None
+            
+            cn_str = m.group(1)
+            
+            # 解析整数部分（元之前）
+            yuan_idx = cn_str.find('元')
+            if yuan_idx == -1:
+                yuan_part = cn_str
+                jiao_part = ""
+                fen_part = ""
+            else:
+                yuan_part = cn_str[:yuan_idx]
+                rest = cn_str[yuan_idx+1:]
+                jiao_idx = rest.find('角')
+                if jiao_idx != -1:
+                    jiao_part = rest[:jiao_idx]
+                    fen_part = rest[jiao_idx+1:].replace('分', '').replace('整', '')
+                else:
+                    jiao_part = ""
+                    fen_part = rest.replace('分', '').replace('整', '')
+            
+            # 解析整数部分
+            result = 0
+            section = 0  # 当前节（万、亿作为分隔）
+            current = 0  # 当前累积值
+            
+            for char in yuan_part:
+                if char in InvoiceHelper.CN_NUM_MAP:
+                    current = InvoiceHelper.CN_NUM_MAP[char]
+                elif char in InvoiceHelper.CN_UNIT_MAP:
+                    unit = InvoiceHelper.CN_UNIT_MAP[char]
+                    if unit >= 10000:  # 万、亿
+                        section = (section + current) * unit
+                        current = 0
+                    else:
+                        section += current * unit
+                        current = 0
+            
+            result = section + current
+            
+            # 解析角分
+            jiao_val = 0
+            fen_val = 0
+            if jiao_part:
+                for char in jiao_part:
+                    if char in InvoiceHelper.CN_NUM_MAP:
+                        jiao_val = InvoiceHelper.CN_NUM_MAP[char]
+            if fen_part:
+                for char in fen_part:
+                    if char in InvoiceHelper.CN_NUM_MAP:
+                        fen_val = InvoiceHelper.CN_NUM_MAP[char]
+            
+            return result + jiao_val * 0.1 + fen_val * 0.01
+        
+        except Exception:
+            return None
+    
     @staticmethod
     def thumb(fp):
         try: 
@@ -254,19 +343,29 @@ class InvoiceHelper:
             if m_date:
                 result["date"] = f"{m_date.group(1)}-{m_date.group(2).zfill(2)}-{m_date.group(3).zfill(2)}"
             
-            # 2. 提取金额
-            # 方法1：匹配 (小写) 6.80 格式
-            m_amount = re.search(r'[（\(]小写[）\)]\s*([0-9,.]+)', text)
-            if m_amount:
-                result["amount"] = float(m_amount.group(1).replace(",", ""))
+            # 2. 提取金额（增强版，支持中文大写）
+            # 方法1：优先尝试中文大写金额（更可靠，如"陆元捌角"）
+            cn_amount = InvoiceHelper.parse_chinese_amount(text)
+            if cn_amount and cn_amount > 0:
+                result["amount"] = cn_amount
             else:
-                # 方法2：直接提取独立的小数金额
-                all_amounts = re.findall(r'(?<!\d)(\d{1,6}\.\d{2})(?!\d)', text)
-                if all_amounts:
-                    # 过滤掉可能的税率
-                    valid_amounts = [float(x) for x in all_amounts if 0.5 < float(x) < 100000]
-                    if valid_amounts:
-                        result["amount"] = valid_amounts[0]
+                # 方法2：匹配 (小写) 6.80 或 小写: 6.80 格式
+                m_amount = re.search(r'[（\(]?小写[）\)]?[：:\s]*[¥￥]?\s*([0-9,.]+)', text)
+                if m_amount:
+                    result["amount"] = float(m_amount.group(1).replace(",", ""))
+                else:
+                    # 方法3：匹配 "金额（小写）" 后的数字
+                    m_amount2 = re.search(r'金额[（\(]?小写[）\)]?[：:\s]*[¥￥]?\s*([0-9,.]+)', text)
+                    if m_amount2:
+                        result["amount"] = float(m_amount2.group(1).replace(",", ""))
+                    else:
+                        # 方法4：直接提取独立的小数金额
+                        all_amounts = re.findall(r'(?<!\d)(\d{1,6}\.\d{2})(?!\d)', text)
+                        if all_amounts:
+                            # 过滤掉可能的税率（通常0.01-0.17）
+                            valid_amounts = [float(x) for x in all_amounts if 0.5 < float(x) < 100000]
+                            if valid_amounts:
+                                result["amount"] = valid_amounts[0]
             
             # 3. 提取票据代码（8位，如11010125）
             m_code = re.search(r'票据代码[：:]*\s*(\d{8})', text)
