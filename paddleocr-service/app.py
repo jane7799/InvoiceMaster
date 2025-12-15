@@ -130,15 +130,45 @@ def parse_invoice_smart(full_text, raw_list):
         'buyer': '', 'seller': '', 'raw_text': raw_list
     }
     
-    # 金额
+    # 金额（优先获取价税合计/含税金额）
     try:
-        # 标准格式：小写、价税合计、¥
-        amount_regex = re.compile(r'(?:小写|价税合计|¥|￥)\s*[:：]?\s*(\d+\.?\d*)')
+        # 第一优先级：明确的"价税合计"或"小写"后的金额（这是含税总金额）
+        total_regex = re.compile(r'(?:价税合计|小写)[^0-9¥￥]*[¥￥]?\s*[:：]?\s*(\d+\.?\d*)')
         for txt in raw_list:
-            match = amount_regex.search(txt)
+            match = total_regex.search(txt)
             if match:
                 result['amount'] = float(match.group(1))
                 break
+        
+        # 第二优先级：处理"合计金额 ¥100（含税/未含税）"格式
+        if result['amount'] == 0:
+            # 检查是否有"含税"和"未含税"标记
+            has_tax_inclusive = '含税' in full_text and '未含税' not in full_text
+            has_tax_exclusive = '未含税' in full_text or '不含税' in full_text
+            
+            combined_regex = re.compile(r'合计金额\s*[¥￥]?\s*(\d+\.?\d*)')
+            for txt in raw_list:
+                match = combined_regex.search(txt)
+                if match:
+                    amount_val = float(match.group(1))
+                    if has_tax_exclusive:
+                        # 这是未含税金额，存到额外字段，后续可能需要加税
+                        result['amount_without_tax'] = str(amount_val)
+                        # 仍然设置为主金额（如果没有其他来源）
+                        result['amount'] = amount_val
+                    else:
+                        result['amount'] = amount_val
+                    break
+        
+        # 第三优先级：标准 ¥ 符号后的金额
+        if result['amount'] == 0:
+            standard_regex = re.compile(r'[¥￥]\s*[:：]?\s*(\d+\.?\d*)')
+            for txt in raw_list:
+                match = standard_regex.search(txt)
+                if match:
+                    result['amount'] = float(match.group(1))
+                    break
+        
         # 火车票/机票格式：票价: ¥9.00
         if result['amount'] == 0:
             ticket_regex = re.compile(r'票价[：:]\s*[¥￥]?\s*(\d+\.?\d*)')
@@ -147,6 +177,7 @@ def parse_invoice_smart(full_text, raw_list):
                 if match:
                     result['amount'] = float(match.group(1))
                     break
+        
         # 财政票据格式：(小写) 6.80
         if result['amount'] == 0:
             fiscal_regex = re.compile(r'[（\(]小写[）\)]\s*(\d+\.?\d*)')
@@ -155,6 +186,8 @@ def parse_invoice_smart(full_text, raw_list):
                 if match:
                     result['amount'] = float(match.group(1))
                     break
+        
+        # 最后回退：取所有金额中的最大值（通常价税合计最大）
         if result['amount'] == 0:
             all_nums = re.findall(r'(\d+\.\d{2})', full_text)
             valid = [float(x) for x in all_nums if 1 < float(x) < 100000000]

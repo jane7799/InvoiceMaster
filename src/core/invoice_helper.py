@@ -122,7 +122,10 @@ class InvoiceHelper:
     def scan_invoice_qrcode(file_path):
         """扫描发票二维码获取结构化数据
         
-        发票二维码格式：01,10,发票代码,发票号码,金额,日期,校验码,...
+        支持两种格式：
+        1. 标准格式：01,10,发票代码,发票号码,金额,日期,校验码,...
+        2. 全电发票格式：包含"合计金额 ¥100（含税）"或"合计金额 ¥100（未含税）"
+        
         返回解析后的字典，如果扫描失败返回None
         """
         if not _PYZBAR_AVAILABLE:
@@ -148,8 +151,9 @@ class InvoiceHelper:
                     barcodes = decode_qr(img)
                     for barcode in barcodes:
                         data = barcode.data.decode("utf-8")
-                        parts = data.split(',')
                         
+                        # 尝试解析标准逗号分隔格式
+                        parts = data.split(',')
                         if len(parts) >= 6:
                             # 标准格式：01,10,发票代码,发票号码,金额,日期,校验码
                             return {
@@ -159,10 +163,115 @@ class InvoiceHelper:
                                 "date": parts[5] if len(parts) > 5 else "",
                                 "check_code": parts[6] if len(parts) > 6 else "",
                             }
+                        
+                        # 非标准格式：可能包含"合计金额 ¥100（含税）"或"合计金额 ¥100（未含税）"
+                        # 这种格式通常出现在全电发票中
+                        result = InvoiceHelper._parse_qrcode_text_format(data)
+                        if result:
+                            return result
+                            
                 finally:
                     os.unlink(tmp_path)
         except Exception as e:
             pass
+        return None
+    
+    @staticmethod
+    def _parse_qrcode_text_format(data):
+        """解析非标准二维码文本格式
+        
+        支持格式：
+        - 合计金额 ¥100（含税）
+        - 合计金额 ¥100（未含税）
+        - 金额:100.00(含税)
+        - 等其他文本格式
+        
+        返回解析后的字典，如果解析失败返回None
+        """
+        result = {
+            "code": "",
+            "number": "",
+            "amount": 0.0,
+            "date": "",
+            "check_code": "",
+            "_qr_has_tax_info": False,  # 标记二维码是否包含税相关信息
+            "_qr_is_tax_inclusive": None,  # True=含税, False=未含税, None=未知
+        }
+        
+        try:
+            # 检测是否包含"含税"或"未含税"标记
+            has_tax_inclusive = "含税" in data and "未含税" not in data
+            has_tax_exclusive = "未含税" in data or "不含税" in data
+            
+            if has_tax_inclusive or has_tax_exclusive:
+                result["_qr_has_tax_info"] = True
+                result["_qr_is_tax_inclusive"] = has_tax_inclusive and not has_tax_exclusive
+            
+            # 提取金额（多种格式）
+            # 格式1: 合计金额 ¥100（含税）/ 合计金额 ¥100（未含税）
+            # 格式2: 金额:100.00
+            # 格式3: ¥100.00
+            amount_patterns = [
+                r'合计金额\s*[¥￥]?\s*([0-9,.]+)',  # 合计金额 ¥100
+                r'金额\s*[:：]?\s*[¥￥]?\s*([0-9,.]+)',  # 金额:100.00
+                r'价税合计\s*[¥￥]?\s*([0-9,.]+)',  # 价税合计 ¥100
+                r'[¥￥]\s*([0-9,.]+)',  # ¥100.00
+            ]
+            
+            for pattern in amount_patterns:
+                m = re.search(pattern, data)
+                if m:
+                    try:
+                        result["amount"] = float(m.group(1).replace(",", ""))
+                        break
+                    except ValueError:
+                        continue
+            
+            # 提取发票号码（20位全电发票或8位传统发票）
+            m_num = re.search(r'发票号[码]?\s*[:：]?\s*(\d{8,20})', data)
+            if m_num:
+                result["number"] = m_num.group(1)
+            else:
+                # 尝试直接匹配20位或8位数字
+                nums = re.findall(r'(?<!\d)(\d{20}|\d{8})(?!\d)', data)
+                if nums:
+                    result["number"] = nums[0]
+            
+            # 提取发票代码（10-12位）
+            m_code = re.search(r'发票代码\s*[:：]?\s*(\d{10,12})', data)
+            if m_code:
+                result["code"] = m_code.group(1)
+            else:
+                codes = re.findall(r'(?<!\d)(\d{10}|\d{12})(?!\d)', data)
+                # 排除已识别的号码
+                codes = [c for c in codes if c != result["number"]]
+                if codes:
+                    result["code"] = codes[0]
+            
+            # 提取日期
+            m_date = re.search(r'(\d{4})[-年/](\d{1,2})[-月/](\d{1,2})', data)
+            if m_date:
+                result["date"] = f"{m_date.group(1)}-{m_date.group(2).zfill(2)}-{m_date.group(3).zfill(2)}"
+            else:
+                # 尝试 YYYYMMDD 格式
+                m_date2 = re.search(r'(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)', data)
+                if m_date2:
+                    y, m, d = m_date2.groups()
+                    if 1 <= int(m) <= 12 and 1 <= int(d) <= 31:
+                        result["date"] = f"{y}-{m}-{d}"
+            
+            # 提取校验码
+            m_check = re.search(r'校验码\s*[:：]?\s*(\w{6,20})', data)
+            if m_check:
+                result["check_code"] = m_check.group(1)
+            
+            # 只有解析出有效信息才返回结果
+            if result["amount"] > 0 or result["number"] or result["code"]:
+                return result
+                
+        except Exception:
+            pass
+        
         return None
     
     @staticmethod
@@ -569,11 +678,26 @@ class InvoiceHelper:
         
         # 首先尝试二维码扫描（最准确）
         qr_data = InvoiceHelper.scan_invoice_qrcode(file_path)
+        qr_amount_is_tax_exclusive = False  # 标记二维码金额是否为未含税金额
         if qr_data:
             result["code"] = qr_data.get("code", "")
             result["number"] = qr_data.get("number", "")
-            result["amount"] = qr_data.get("amount", 0.0)
             result["check_code"] = qr_data.get("check_code", "")
+            
+            # 处理二维码中的金额
+            qr_amount = qr_data.get("amount", 0.0)
+            
+            # 检查二维码是否明确标记为"未含税"金额
+            if qr_data.get("_qr_has_tax_info") and qr_data.get("_qr_is_tax_inclusive") == False:
+                # 二维码明确标记为"未含税"，将金额存为不含税金额
+                if qr_amount > 0:
+                    result["amount_without_tax"] = str(qr_amount)
+                qr_amount_is_tax_exclusive = True
+                # 后续会从文本中提取价税合计作为主金额
+            else:
+                # 标准格式或含税金额，直接作为主金额
+                result["amount"] = qr_amount
+            
             # 日期格式转换：二维码中可能是 YYYYMMDD
             qr_date = qr_data.get("date", "")
             if qr_date and len(qr_date) == 8:
@@ -766,28 +890,37 @@ class InvoiceHelper:
                     m_num = re.search(r'(?<!\d)(\d{8}|0\d{8})(?!\d)', text) # 特例：有些号码前面带0
                     if m_num: result["number"] = m_num.group(1)
                     
-                if not result.get("amount") or result.get("amount") == 0:
-                    # 尝试匹配 小写：123.00
-                    amounts = re.findall(r'[¥￥]\s*([0-9,.]+)', text)
-                    if amounts:
-                        # 通常金额是最大的那个（可能是价税合计）
-                        valid_amounts = []
-                        for x in amounts:
-                            try:
-                                val = float(x.replace(",", ""))
-                                # [V3.5 修复] 排除极大的数值（防止误匹配到发票代码，如 25427000000）
-                                # 发票代码通常是 10/12/20 位数字，且如果是金额则会非常巨大
-                                if val > 100000000 and float(x.replace(",", "").replace(".", "")) == val: 
-                                    continue # 排除像是纯数字的长串
-                                    
-                                # 排除与发票代码/号码相同的数值
-                                if str(int(val)) == result.get("code") or str(int(val)) == result.get("number"):
-                                    continue
-                                    
-                                valid_amounts.append(val)
-                            except: pass
-                        if valid_amounts:
-                            result["amount"] = max(valid_amounts)
+                if not result.get("amount") or result.get("amount") == 0 or qr_amount_is_tax_exclusive:
+                    # 优先匹配"价税合计"或"小写"后的金额（这是含税总金额）
+                    m_total = re.search(r'(?:价税合计|小写)[^0-9¥￥]*[¥￥]?\s*([0-9,]+\.?\d*)', text)
+                    if m_total:
+                        try:
+                            result["amount"] = float(m_total.group(1).replace(",", ""))
+                        except ValueError:
+                            pass
+                    
+                    # 如果还没有金额，回退到所有¥符号后的金额
+                    if not result.get("amount") or result.get("amount") == 0:
+                        amounts = re.findall(r'[¥￥]\s*([0-9,.]+)', text)
+                        if amounts:
+                            # 通常金额是最大的那个（可能是价税合计）
+                            valid_amounts = []
+                            for x in amounts:
+                                try:
+                                    val = float(x.replace(",", ""))
+                                    # [V3.5 修复] 排除极大的数值（防止误匹配到发票代码，如 25427000000）
+                                    # 发票代码通常是 10/12/20 位数字，且如果是金额则会非常巨大
+                                    if val > 100000000 and float(x.replace(",", "").replace(".", "")) == val: 
+                                        continue # 排除像是纯数字的长串
+                                        
+                                    # 排除与发票代码/号码相同的数值
+                                    if str(int(val)) == result.get("code") or str(int(val)) == result.get("number"):
+                                        continue
+                                        
+                                    valid_amounts.append(val)
+                                except: pass
+                            if valid_amounts:
+                                result["amount"] = max(valid_amounts)
                 
                 # 尝试提取发票类型
                 if "增值税专用发票" in full_raw_text:

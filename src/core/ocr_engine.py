@@ -134,23 +134,32 @@ class InvoiceHelper:
                     return result
                 
                 # === 金额提取 ===
-                # 优先匹配"价税合计"或"小写"后的金额
-                m_total = re.search(r'(?:价税合计|小写)[^\d¥￥]*[¥￥]?\s*([0-9,]+\.\d{2})', text)
+                # 优先匹配"价税合计"或"小写"后的金额（这是含税总金额）
+                # 注意：发票中通常有两个金额：
+                # 1. "合计"（或"金额"）= 不含税金额
+                # 2. "价税合计"（或"小写"）= 含税总金额（我们要的）
+                m_total = re.search(r'(?:价税合计|小写)[^0-9¥￥]*[¥￥]?\s*([0-9,]+\.?\d*)', text)
                 if m_total:
                     result["amount"] = float(m_total.group(1).replace(",", ""))
                 else:
-                    # 回退：提取所有金额，取最大值
+                    # 回退：提取所有金额，取最大值（通常价税合计是最大的）
                     amounts = re.findall(r'[¥￥]\s*([0-9,]+\.\d{2})', text)
                     if amounts:
                         result["amount"] = max([float(x.replace(",", "")) for x in amounts])
                 
-                # 不含税金额
-                m_without_tax = re.search(r'(?:合\s*计|金\s*额)[^\d¥￥]*[¥￥]?\s*([0-9,]+\.\d{2})', text)
+                # 不含税金额（注意：必须排除"价税合计"，只匹配独立的"合计"或"金额"）
+                # 使用负向前瞻来排除"价税合计"
+                m_without_tax = re.search(r'(?<!价税)合\s*计[^0-9¥￥]*[¥￥]?\s*([0-9,]+\.?\d*)', text)
                 if m_without_tax:
                     result["amount_without_tax"] = m_without_tax.group(1).replace(",", "")
+                else:
+                    # 回退：尝试匹配"金额"列（通常在商品明细行的合计处）
+                    m_without_tax2 = re.search(r'金\s*额[^0-9¥￥价税]*[¥￥]?\s*([0-9,]+\.?\d*)', text)
+                    if m_without_tax2:
+                        result["amount_without_tax"] = m_without_tax2.group(1).replace(",", "")
                 
                 # 税额
-                m_tax = re.search(r'(?:税\s*额)[^\d¥￥]*[¥￥]?\s*([0-9,]+\.\d{2})', text)
+                m_tax = re.search(r'税\s*额[^0-9¥￥]*[¥￥]?\s*([0-9,]+\.?\d*)', text)
                 if m_tax:
                     result["tax_amt"] = m_tax.group(1).replace(",", "")
                 
