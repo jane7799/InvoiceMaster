@@ -134,18 +134,37 @@ class InvoiceHelper:
                     return result
                 
                 # === 金额提取 ===
+                # [V3.6 修复] 增强金额识别，使用多种匹配模式
                 # 优先匹配"价税合计"或"小写"后的金额（这是含税总金额）
                 # 注意：发票中通常有两个金额：
                 # 1. "合计"（或"金额"）= 不含税金额
                 # 2. "价税合计"（或"小写"）= 含税总金额（我们要的）
-                m_total = re.search(r'(?:价税合计|小写)[^0-9¥￥]*[¥￥]?\s*([0-9,]+\.?\d*)', text)
-                if m_total:
-                    result["amount"] = float(m_total.group(1).replace(",", ""))
-                else:
+                total_patterns = [
+                    r'(?:价税合计|小写)[^0-9¥￥]*[¥￥]?\s*[:：]?\s*([0-9,，]+\.?\d*)',  # 标准格式
+                    r'价税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*([0-9,，]+\.?\d*)',  # 允许空格分隔
+                    r'税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*([0-9,，]+\.?\d*)',  # 仅"税合计"
+                    r'[（\(]小写[）\)]\s*[¥￥]?\s*([0-9,，]+\.?\d*)',  # (小写) 格式
+                ]
+                
+                for pattern in total_patterns:
+                    m_total = re.search(pattern, text)
+                    if m_total:
+                        try:
+                            amount_str = m_total.group(1).replace(",", "").replace("，", "")
+                            result["amount"] = float(amount_str)
+                            break
+                        except ValueError:
+                            pass
+                
+                if result["amount"] == 0:
                     # 回退：提取所有金额，取最大值（通常价税合计是最大的）
-                    amounts = re.findall(r'[¥￥]\s*([0-9,]+\.\d{2})', text)
+                    amounts = re.findall(r'[¥￥]\s*([0-9,，]+\.\d{2})', text)
                     if amounts:
-                        result["amount"] = max([float(x.replace(",", "")) for x in amounts])
+                        valid_amounts = [float(x.replace(",", "").replace("，", "")) for x in amounts]
+                        # 排除极大值（可能是发票代码）
+                        valid_amounts = [x for x in valid_amounts if x < 100000000]
+                        if valid_amounts:
+                            result["amount"] = max(valid_amounts)
                 
                 # 不含税金额（注意：必须排除"价税合计"，只匹配独立的"合计"或"金额"）
                 # 使用负向前瞻来排除"价税合计"

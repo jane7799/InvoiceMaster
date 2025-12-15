@@ -891,26 +891,39 @@ class InvoiceHelper:
                     if m_num: result["number"] = m_num.group(1)
                     
                 if not result.get("amount") or result.get("amount") == 0 or qr_amount_is_tax_exclusive:
+                    # [V3.6 修复] 增强金额识别，使用多种匹配模式处理不同PDF格式
                     # 优先匹配"价税合计"或"小写"后的金额（这是含税总金额）
-                    m_total = re.search(r'(?:价税合计|小写)[^0-9¥￥]*[¥￥]?\s*([0-9,]+\.?\d*)', text)
-                    if m_total:
-                        try:
-                            result["amount"] = float(m_total.group(1).replace(",", ""))
-                        except ValueError:
-                            pass
+                    total_patterns = [
+                        r'(?:价税合计|小写)[^0-9¥￥]*[¥￥]?\s*[:：]?\s*([0-9,，]+\.?\d*)',  # 标准格式
+                        r'价税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*([0-9,，]+\.?\d*)',  # 允许空格分隔
+                        r'税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*([0-9,，]+\.?\d*)',  # 仅"税合计"
+                        r'[（\(]小写[）\)]\s*[¥￥]?\s*([0-9,，]+\.?\d*)',  # (小写) 格式
+                    ]
+                    
+                    for pattern in total_patterns:
+                        m_total = re.search(pattern, text)
+                        if m_total:
+                            try:
+                                amount_str = m_total.group(1).replace(",", "").replace("，", "")
+                                result["amount"] = float(amount_str)
+                                break
+                            except ValueError:
+                                pass
+                        if result.get("amount", 0) > 0:
+                            break
                     
                     # 如果还没有金额，回退到所有¥符号后的金额
                     if not result.get("amount") or result.get("amount") == 0:
-                        amounts = re.findall(r'[¥￥]\s*([0-9,.]+)', text)
+                        amounts = re.findall(r'[¥￥]\s*([0-9,，.]+)', text)
                         if amounts:
                             # 通常金额是最大的那个（可能是价税合计）
                             valid_amounts = []
                             for x in amounts:
                                 try:
-                                    val = float(x.replace(",", ""))
+                                    val = float(x.replace(",", "").replace("，", ""))
                                     # [V3.5 修复] 排除极大的数值（防止误匹配到发票代码，如 25427000000）
                                     # 发票代码通常是 10/12/20 位数字，且如果是金额则会非常巨大
-                                    if val > 100000000 and float(x.replace(",", "").replace(".", "")) == val: 
+                                    if val > 100000000 and float(x.replace(",", "").replace("，", "").replace(".", "")) == val: 
                                         continue # 排除像是纯数字的长串
                                         
                                     # 排除与发票代码/号码相同的数值

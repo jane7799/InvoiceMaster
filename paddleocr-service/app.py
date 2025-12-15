@@ -131,26 +131,67 @@ def parse_invoice_smart(full_text, raw_list):
     }
     
     # 金额（优先获取价税合计/含税金额）
+    # [V3.6 修复] 增强金额识别，处理OCR将"价税合计"和金额分成不同行的情况
     try:
-        # 第一优先级：明确的"价税合计"或"小写"后的金额（这是含税总金额）
-        total_regex = re.compile(r'(?:价税合计|小写)[^0-9¥￥]*[¥￥]?\s*[:：]?\s*(\d+\.?\d*)')
-        for txt in raw_list:
-            match = total_regex.search(txt)
-            if match:
-                result['amount'] = float(match.group(1))
-                break
+        # === 第一阶段：在完整文本中搜索（处理分行情况）===
+        # 将所有文本合并，用空格分隔（模拟连续文本）
+        merged_text = ' '.join(raw_list)
         
-        # 第二优先级：处理"合计金额 ¥100（含税/未含税）"格式
+        # 第一优先级：明确的"价税合计"或"小写"后的金额（这是含税总金额）
+        # 增加更宽松的匹配模式，处理OCR分行情况
+        total_patterns = [
+            r'(?:价税合计|小写)[^0-9¥￥]*[¥￥]?\s*[:：]?\s*(\d+[,，]?\d*\.?\d*)',  # 标准格式
+            r'价税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*(\d+[,，]?\d*\.?\d*)',  # 允许空格分隔
+            r'税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*(\d+[,，]?\d*\.?\d*)',  # 仅"税合计"
+            r'[（\(]小写[）\)]\s*[¥￥]?\s*(\d+[,，]?\d*\.?\d*)',  # (小写) 格式
+        ]
+        
+        for pattern in total_patterns:
+            total_regex = re.compile(pattern)
+            # 先在合并文本中搜索
+            match = total_regex.search(merged_text)
+            if match:
+                amount_str = match.group(1).replace(',', '').replace('，', '')
+                result['amount'] = float(amount_str)
+                break
+            # 再逐行搜索
+            if result['amount'] == 0:
+                for txt in raw_list:
+                    match = total_regex.search(txt)
+                    if match:
+                        amount_str = match.group(1).replace(',', '').replace('，', '')
+                        result['amount'] = float(amount_str)
+                        break
+                if result['amount'] > 0:
+                    break
+        
+        # === 第二阶段：处理相邻行的情况 ===
+        # OCR 有时会将 "价税合计" 和 "¥100.00" 识别为相邻的两行
+        if result['amount'] == 0:
+            for i, txt in enumerate(raw_list):
+                if '价税合计' in txt or '小写' in txt or '税合计' in txt:
+                    # 在当前行和下几行中查找金额
+                    for j in range(0, min(3, len(raw_list) - i)):
+                        amount_match = re.search(r'[¥￥]?\s*(\d+[,，]?\d*\.\d{2})', raw_list[i + j])
+                        if amount_match:
+                            amount_str = amount_match.group(1).replace(',', '').replace('，', '')
+                            result['amount'] = float(amount_str)
+                            break
+                    if result['amount'] > 0:
+                        break
+        
+        # 第三优先级：处理"合计金额 ¥100（含税/未含税）"格式
         if result['amount'] == 0:
             # 检查是否有"含税"和"未含税"标记
             has_tax_inclusive = '含税' in full_text and '未含税' not in full_text
             has_tax_exclusive = '未含税' in full_text or '不含税' in full_text
             
-            combined_regex = re.compile(r'合计金额\s*[¥￥]?\s*(\d+\.?\d*)')
+            combined_regex = re.compile(r'合计金额\s*[¥￥]?\s*(\d+[,，]?\d*\.?\d*)')
             for txt in raw_list:
                 match = combined_regex.search(txt)
                 if match:
-                    amount_val = float(match.group(1))
+                    amount_str = match.group(1).replace(',', '').replace('，', '')
+                    amount_val = float(amount_str)
                     if has_tax_exclusive:
                         # 这是未含税金额，存到额外字段，后续可能需要加税
                         result['amount_without_tax'] = str(amount_val)
@@ -160,14 +201,23 @@ def parse_invoice_smart(full_text, raw_list):
                         result['amount'] = amount_val
                     break
         
-        # 第三优先级：标准 ¥ 符号后的金额
+        # 第四优先级：标准 ¥ 符号后的金额（但要排除不含税金额）
         if result['amount'] == 0:
-            standard_regex = re.compile(r'[¥￥]\s*[:：]?\s*(\d+\.?\d*)')
+            # 收集所有 ¥ 后的金额
+            all_yen_amounts = []
+            standard_regex = re.compile(r'[¥￥]\s*[:：]?\s*(\d+[,，]?\d*\.?\d*)')
             for txt in raw_list:
-                match = standard_regex.search(txt)
-                if match:
-                    result['amount'] = float(match.group(1))
-                    break
+                for match in standard_regex.finditer(txt):
+                    try:
+                        amount_str = match.group(1).replace(',', '').replace('，', '')
+                        val = float(amount_str)
+                        if val > 0.5:  # 排除太小的值
+                            all_yen_amounts.append(val)
+                    except: pass
+            
+            # 通常价税合计是最大的金额
+            if all_yen_amounts:
+                result['amount'] = max(all_yen_amounts)
         
         # 火车票/机票格式：票价: ¥9.00
         if result['amount'] == 0:
