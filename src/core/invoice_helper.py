@@ -981,6 +981,96 @@ class InvoiceHelper:
         return result
 
     @staticmethod
+    def parse_invoice_local_no_qr(file_path):
+        """本地解析发票（不含二维码扫描）
+        
+        用于 OCR 优先级链中，在二维码扫描失败后单独进行文字提取。
+        返回与OCR接口一致的字典格式。
+        """
+        result = {
+            "date": "",
+            "amount": 0.0,
+            "amount_without_tax": "",
+            "tax_amt": "",
+            "tax_rate": "",
+            "seller": "",
+            "seller_tax_id": "",
+            "buyer": "",
+            "buyer_tax_id": "",
+            "code": "",
+            "number": "",
+            "check_code": "",
+            "invoice_type": "",
+            "item_name": "",
+            "remark": "",
+            "machine_code": "",
+            "_local_parsed": True,
+        }
+        
+        try:
+            with fitz.open(file_path) as doc:
+                # 提取所有文本
+                all_text_parts = []
+                for page in doc:
+                    text = page.get_text()
+                    if text.strip():
+                        all_text_parts.append(text)
+                
+                text = "\n".join(all_text_parts)
+                if not text.strip():
+                    return result
+                
+                # 金额提取（使用增强的匹配模式）
+                total_patterns = [
+                    r'(?:价税合计|价税\s*合\s*计)[^0-9¥￥]*[¥￥]?\s*[:：]?\s*([0-9,，]+\.?\d*)',
+                    r'[（\(]小写[）\)]\s*[¥￥]\s*([0-9,，]+\.\d{2})',
+                    r'小写[）\)]\s*[¥￥]\s*([0-9,，]+\.\d{2})',
+                    r'小写[^0-9¥￥]*[¥￥]\s*([0-9,，]+\.\d{2})',
+                ]
+                
+                for pattern in total_patterns:
+                    m = re.search(pattern, text)
+                    if m:
+                        try:
+                            result["amount"] = float(m.group(1).replace(",", "").replace("，", ""))
+                            break
+                        except ValueError:
+                            pass
+                
+                # 回退：取所有金额中最大的
+                if result["amount"] == 0:
+                    amounts = re.findall(r'[¥￥]\s*([0-9,，]+\.\d{2})', text)
+                    if amounts:
+                        valid = [float(x.replace(",", "").replace("，", "")) for x in amounts]
+                        valid = [x for x in valid if x < 100000000]
+                        if valid:
+                            result["amount"] = max(valid)
+                
+                # 日期提取
+                m_date = re.search(r'(\d{4})[-年](\d{1,2})[-月](\d{1,2})', text)
+                if m_date:
+                    result["date"] = f"{m_date.group(1)}-{m_date.group(2).zfill(2)}-{m_date.group(3).zfill(2)}"
+                
+                # 发票号码
+                m_num20 = re.search(r'发票号[码]?[：:]*\s*(\d{20})', text)
+                if m_num20:
+                    result["number"] = m_num20.group(1)
+                else:
+                    m_num8 = re.search(r'发票号[码]?[：:]*\s*(\d{8})\b', text)
+                    if m_num8:
+                        result["number"] = m_num8.group(1)
+                
+                # 发票代码
+                m_code = re.search(r'发票代码[：:]*\s*(\d{10,12})', text)
+                if m_code:
+                    result["code"] = m_code.group(1)
+                
+        except Exception:
+            pass
+        
+        return result
+
+    @staticmethod
     def _is_result_complete(result):
         """检查解析结果是否完整（足以跳过OCR）"""
         if not result:

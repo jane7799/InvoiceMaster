@@ -312,41 +312,60 @@ class InvoiceHelper:
     
     @staticmethod
     def ocr(fp, ak, sk):
-        """执行 OCR 识别（本地解析优先，回退到远程服务）
+        """执行 OCR 识别
         
-        优先级：本地PDF解析 → 私有OCR服务 → 百度云OCR
+        优先级：百度云OCR → 私有OCR服务 → 二维码扫描 → 本地PDF解析
         """
         logger = logging.getLogger(__name__)
         s = QSettings("MySoft", "InvoiceMaster")
         private_ocr_url = s.value("private_ocr_url", "")
         
-        # 1. 优先尝试本地解析（适用于矢量PDF）
-        if fp.lower().endswith('.pdf'):
+        # 1. 优先尝试百度云 OCR（识别精度最高）
+        if ak and sk:
             try:
-                local_result = InvoiceHelper.parse_invoice_local(fp)
-                # 如果提取到金额和日期，认为本地解析成功
-                if local_result.get("amount", 0) > 0 and local_result.get("date"):
-                    logger.info(f"本地解析成功: {os.path.basename(fp)}, 金额: {local_result['amount']}")
-                    return local_result
-                elif local_result.get("amount", 0) > 0:
-                    # 只有金额也可以接受
-                    logger.info(f"本地解析部分成功: {os.path.basename(fp)}, 金额: {local_result['amount']}")
-                    return local_result
+                result = InvoiceHelper._call_baidu_ocr(fp, ak, sk, logger)
+                if result and result.get("amount", 0) > 0:
+                    logger.info(f"百度OCR成功: {os.path.basename(fp)}, 金额: {result['amount']}")
+                    return result
             except Exception as e:
-                logger.warning(f"本地解析失败: {str(e)}")
+                logger.warning(f"百度OCR失败: {str(e)}，尝试私有OCR")
         
         # 2. 尝试私有 OCR 服务
         if private_ocr_url:
             try:
                 result = InvoiceHelper._call_private_ocr(fp, private_ocr_url, logger)
-                if result:
-                    logger.info(f"私有OCR成功: {os.path.basename(fp)}")
+                if result and result.get("amount", 0) > 0:
+                    logger.info(f"私有OCR成功: {os.path.basename(fp)}, 金额: {result['amount']}")
                     return result
             except Exception as e:
-                logger.warning(f"私有OCR失败: {str(e)}，回退到百度OCR")
+                logger.warning(f"私有OCR失败: {str(e)}，尝试二维码扫描")
         
-        # 3. 回退到百度云 OCR
-        return InvoiceHelper._call_baidu_ocr(fp, ak, sk, logger)
+        # 3. 尝试二维码扫描（需要导入 InvoiceHelper）
+        if fp.lower().endswith('.pdf'):
+            try:
+                from .invoice_helper import InvoiceHelper as IH
+                qr_result = IH.scan_invoice_qrcode(fp)
+                if qr_result and qr_result.get("amount", 0) > 0:
+                    logger.info(f"二维码扫描成功: {os.path.basename(fp)}, 金额: {qr_result['amount']}")
+                    # 补充必要的字段
+                    qr_result["_local_parsed"] = True
+                    return qr_result
+            except Exception as e:
+                logger.warning(f"二维码扫描失败: {str(e)}，尝试本地解析")
+        
+        # 4. 尝试本地 PDF 解析（适用于矢量PDF，不含二维码扫描）
+        if fp.lower().endswith('.pdf'):
+            try:
+                local_result = InvoiceHelper.parse_invoice_local_no_qr(fp)
+                if local_result.get("amount", 0) > 0:
+                    logger.info(f"本地解析成功: {os.path.basename(fp)}, 金额: {local_result['amount']}")
+                    return local_result
+            except Exception as e:
+                logger.warning(f"本地解析失败: {str(e)}")
+        
+        # 5. 最后回退：返回空结果
+        logger.warning(f"所有OCR方式均失败: {os.path.basename(fp)}")
+        return {}
     
     @staticmethod
     def _call_private_ocr(fp, private_ocr_url, logger):

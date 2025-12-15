@@ -70,23 +70,50 @@ class OcrWorker(QThread):
                 result = None
                 ocr_error = None
                 
-                # 优先尝试私有OCR
-                if private_url:
-                    try:
-                        result = self._call_private_ocr(fp, private_url)
-                    except Exception as e:
-                        ocr_error = f"私有OCR失败({str(e)})"
-                        self.logger.warning(f"{os.path.basename(fp)} 私有OCR失败，尝试调用百度OCR")
-                
-                # 如果没配私有OCR，或私有OCR失败，尝试百度OCR
-                if not result:
+                # 1. 优先尝试百度OCR（识别精度最高）
+                if self.ak and self.sk:
                     try:
                         result = self._call_baidu_ocr(fp)
+                        if result and result.get("amount", 0) > 0:
+                            return idx, result, None
+                    except Exception as e:
+                        ocr_error = f"百度OCR失败({str(e)})"
+                        self.logger.warning(f"{os.path.basename(fp)} 百度OCR失败，尝试私有OCR")
+                
+                # 2. 尝试私有OCR
+                if private_url and not result:
+                    try:
+                        result = self._call_private_ocr(fp, private_url)
+                        if result and result.get("amount", 0) > 0:
+                            return idx, result, None
                     except Exception as e:
                         if ocr_error:
-                            ocr_error += f"; 百度OCR失败({str(e)})"
+                            ocr_error += f"; 私有OCR失败({str(e)})"
                         else:
-                            ocr_error = str(e)
+                            ocr_error = f"私有OCR失败({str(e)})"
+                        self.logger.warning(f"{os.path.basename(fp)} 私有OCR失败，尝试二维码扫描")
+                
+                # 3. 尝试二维码扫描
+                if fp.lower().endswith('.pdf') and not result:
+                    try:
+                        qr_result = InvoiceHelper.scan_invoice_qrcode(fp)
+                        if qr_result and qr_result.get("amount", 0) > 0:
+                            qr_result["_local_parsed"] = True
+                            return idx, qr_result, None
+                    except Exception as e:
+                        self.logger.warning(f"{os.path.basename(fp)} 二维码扫描失败，尝试本地解析")
+                
+                # 4. 尝试本地OCR解析
+                if fp.lower().endswith('.pdf') and not result:
+                    try:
+                        local_result = InvoiceHelper.parse_invoice_local_no_qr(fp)
+                        if local_result and local_result.get("amount", 0) > 0:
+                            return idx, local_result, None
+                    except Exception as e:
+                        if ocr_error:
+                            ocr_error += f"; 本地解析失败({str(e)})"
+                        else:
+                            ocr_error = f"本地解析失败({str(e)})"
                             
                 if result:
                     return idx, result, None
