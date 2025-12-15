@@ -848,8 +848,8 @@ class InvoiceHelper:
             
             # 优先级1：价税合计 + 小写 组合（最可靠）
             # 匹配"价税合计"附近的"(小写)¥65.52"或"小写¥65.52"
-            # [V3.6.3] 增大距离限制到200字符，兼容PDF文本分散提取
-            m_combined = re.search(r'价税[^¥￥]{0,200}[（\(]?\s*小写\s*[）\)]?\s*[¥￥]\s*([0-9,，]+\.\d{2})', text)
+            # [V3.6.3] 使用DOTALL模式允许跨行，因为PDF提取时经常分行
+            m_combined = re.search(r'价税.*?[（\(]?\s*小写\s*[）\)]?\s*[¥￥]\s*([0-9,，]+\.\d{2})', text, re.DOTALL)
             if m_combined:
                 result["amount"] = float(m_combined.group(1).replace(",", "").replace("，", ""))
             
@@ -872,13 +872,18 @@ class InvoiceHelper:
                     result["amount"] = float(m_xiaoxie2.group(1).replace(",", "").replace("，", ""))
             
             # 优先级5：单独匹配"价税合计"
+            # [V3.6.3] 限制距离在50字符内，避免跨太多行错误匹配
             if result["amount"] == 0:
-                m_total = re.search(r'价税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*([0-9,，]+\.\d{2})', text)
+                m_total = re.search(r'价税\s*合\s*计[^0-9¥￥]{0,50}[¥￥]\s*([0-9,，]+\.\d{2})', text)
                 if m_total:
                     result["amount"] = float(m_total.group(1).replace(",", "").replace("，", ""))
             
             # 优先级6：智能比对（找比"合计"大的金额）
+            # [V3.6.3] 特别处理：如果有"(小写)"关键词，在文本末尾找最大¥金额
             if result["amount"] == 0:
+                has_xiaoxie = '小写' in text or '（小写）' in text or '(小写)' in text
+                
+                # 找到"合计"行的金额（不含税）
                 m_heji = re.search(r'合\s*计[^价税\n]*[¥￥]\s*([0-9,，]+\.\d{2})', text)
                 heji_amount = 0
                 if m_heji:
@@ -898,14 +903,26 @@ class InvoiceHelper:
                         except:
                             pass
                     
-                    if heji_amount > 0 and valid:
-                        larger = [v for v in valid if v > heji_amount]
-                        if larger:
-                            result["amount"] = min(larger)
+                    if valid:
+                        if has_xiaoxie and heji_amount > 0:
+                            # 有"小写"标记，找比"合计"大的
+                            larger = [v for v in valid if v > heji_amount]
+                            if larger:
+                                # 取最接近合计的（价税合计 = 合计 + 税）
+                                result["amount"] = min(larger)
+                            else:
+                                # 没有更大的，取最大值（可能PDF提取有问题）
+                                result["amount"] = max(valid)
+                        elif heji_amount > 0:
+                            # 没有"小写"，找比合计大的
+                            larger = [v for v in valid if v > heji_amount]
+                            if larger:
+                                result["amount"] = min(larger)
+                            else:
+                                result["amount"] = max(valid)
                         else:
+                            # 没有合计，取最大值
                             result["amount"] = max(valid)
-                    elif valid:
-                        result["amount"] = max(valid)
             
             # 提取不含税金额（"合计"行，不是"价税合计"）
             m_without_tax = re.search(r'(?<!价税)\s*合\s*计[^价税0-9¥￥]*[¥￥]?\s*([0-9,，]+\.\d{2})', text)
