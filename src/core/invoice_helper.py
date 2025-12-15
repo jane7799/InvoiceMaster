@@ -973,12 +973,51 @@ class InvoiceHelper:
                 result["seller"] = m_seller.group(1).strip()
             
             # 税号（统一社会信用代码）
-            tax_ids = re.findall(r'([A-Za-z0-9]{15,20})', text)
-            if len(tax_ids) >= 2:
-                result["buyer_tax_id"] = tax_ids[0]
-                result["seller_tax_id"] = tax_ids[1]
-            elif len(tax_ids) == 1:
-                result["buyer_tax_id"] = tax_ids[0]
+            # [V3.6.4 修复] 使用上下文关键词准确匹配税号，避免顺序错误
+            # 发票格式：购买方信息在上/左，销售方信息在下/右
+            # 需要根据"购买方"/"销售方"关键词附近的税号来判断归属
+            
+            # 方法1：基于上下文匹配（优先）
+            # 匹配"购买方"区块中的税号
+            m_buyer_tax = re.search(r'购\s*买\s*方[^销]{0,200}?([A-Za-z0-9]{15,18})', text, re.DOTALL)
+            if m_buyer_tax:
+                result["buyer_tax_id"] = m_buyer_tax.group(1)
+            
+            # 匹配"销售方"区块中的税号
+            m_seller_tax = re.search(r'销\s*售\s*方[^购]{0,200}?([A-Za-z0-9]{15,18})', text, re.DOTALL)
+            if m_seller_tax:
+                result["seller_tax_id"] = m_seller_tax.group(1)
+            
+            # 方法2：如果上下文匹配失败，使用"纳税人识别号"标记
+            if not result["buyer_tax_id"] or not result["seller_tax_id"]:
+                # 查找所有"纳税人识别号"或"统一社会信用代码"后的税号
+                tax_patterns = re.findall(r'(购买方|销售方)?[^A-Za-z0-9]{0,50}?(?:纳税人识别号|统一社会信用代码|税\s*号)[：:\s]*([A-Za-z0-9]{15,18})', text, re.DOTALL)
+                for label, tax_id in tax_patterns:
+                    if label and '购' in label and not result["buyer_tax_id"]:
+                        result["buyer_tax_id"] = tax_id
+                    elif label and '销' in label and not result["seller_tax_id"]:
+                        result["seller_tax_id"] = tax_id
+            
+            # 方法3：兜底 - 如果仍然没有，按文本出现顺序（传统格式购买方在前）
+            if not result["buyer_tax_id"] or not result["seller_tax_id"]:
+                # 只提取15-18位的有效税号（排除8位发票号码和20位校验码/全电号码）
+                tax_ids = re.findall(r'(?<![A-Za-z0-9])([A-Za-z0-9]{15,18})(?![A-Za-z0-9])', text)
+                # 去重
+                seen = set()
+                unique_tax_ids = []
+                for tid in tax_ids:
+                    if tid not in seen:
+                        seen.add(tid)
+                        unique_tax_ids.append(tid)
+                
+                if len(unique_tax_ids) >= 2:
+                    if not result["buyer_tax_id"]:
+                        result["buyer_tax_id"] = unique_tax_ids[0]
+                    if not result["seller_tax_id"]:
+                        result["seller_tax_id"] = unique_tax_ids[1]
+                elif len(unique_tax_ids) == 1:
+                    if not result["buyer_tax_id"]:
+                        result["buyer_tax_id"] = unique_tax_ids[0]
             
             # === 7. 商品名称 ===
             # 匹配 *类别*商品名 格式
