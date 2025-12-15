@@ -716,18 +716,56 @@ class MainWindow(QMainWindow):
                 try: tax_amt = float(ext.get("tax_amt", "") or 0)
                 except: tax_amt = ""
                 
+                # [V3.6.5] 导出时字段补充逻辑（独立于OCR优先级）
+                # 如果关键字段为空，尝试从PDF重新解析获取
+                code = ext.get("code", "")
+                number = ext.get("number", "")
+                check_code = ext.get("check_code", "")
+                seller = ext.get("seller", "")
+                seller_tax_id = ext.get("seller_tax_id", "")
+                buyer = ext.get("buyer", "")
+                buyer_tax_id = ext.get("buyer_tax_id", "")
+                
+                # 如果核心字段缺失，尝试从PDF重新解析
+                file_path = x.get("p", "")
+                if file_path and file_path.lower().endswith(".pdf"):
+                    need_reparse = not code or not number or not seller or not seller_tax_id
+                    if need_reparse:
+                        try:
+                            from src.core.invoice_helper import InvoiceHelper
+                            # 重新解析PDF获取缺失字段
+                            reparse_result = InvoiceHelper.parse_invoice_local(file_path)
+                            if reparse_result:
+                                # 只补充缺失的字段，不覆盖已有的
+                                if not code and reparse_result.get("code"):
+                                    code = reparse_result["code"]
+                                if not number and reparse_result.get("number"):
+                                    number = reparse_result["number"]
+                                if not check_code and reparse_result.get("check_code"):
+                                    check_code = reparse_result["check_code"]
+                                if not seller and reparse_result.get("seller"):
+                                    seller = reparse_result["seller"]
+                                if not seller_tax_id and reparse_result.get("seller_tax_id"):
+                                    seller_tax_id = reparse_result["seller_tax_id"]
+                                if not buyer and reparse_result.get("buyer"):
+                                    buyer = reparse_result["buyer"]
+                                if not buyer_tax_id and reparse_result.get("buyer_tax_id"):
+                                    buyer_tax_id = reparse_result["buyer_tax_id"]
+                        except Exception as e:
+                            logger.warning(f"导出时重新解析失败: {e}")
+                
                 # 标准导出字段
                 row_data = {
                     "序号": export_idx,
                     "开票日期": x.get("d", ""), 
                     "发票类型": ext.get("invoice_type", ""),
-                    "发票代码": ext.get("code", ""), 
-                    "发票号码": ext.get("number", ""), 
-                    "校验码": ext.get("check_code", "")[-6:] if ext.get("check_code") else "",
-                    "购买方名称": ext.get("buyer", ""),
-                    "购买方税号": ext.get("buyer_tax_id", ""),
-                    "销售方名称": ext.get("seller", ""), 
-                    "销售方税号": ext.get("seller_tax_id", ""),
+                    "发票代码": code, 
+                    "发票号码": number, 
+                    "校验码": check_code[-6:] if check_code else "",
+                    "购买方名称": buyer,
+                    "购买方税号": buyer_tax_id,
+                    "销售方名称": seller, 
+                    "销售方税号": seller_tax_id,
                     "不含税金额": amount_without_tax,
                     "税率": ext.get("tax_rate", ""),
                     "税额": tax_amt,
