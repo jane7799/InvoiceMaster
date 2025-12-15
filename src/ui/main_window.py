@@ -57,9 +57,23 @@ class MainWindow(QMainWindow):
         self.change_theme("Light")
 
     def closeEvent(self, event):
+        """应用关闭时清理资源"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 清理临时文件
         for f in self.temp_files:
             try: os.remove(f)
             except: pass
+        
+        # [V3.6] 清除数据库缓存，避免上一次数据带入下一次
+        try:
+            from src.core.database import get_db
+            deleted = get_db().clear_all()
+            logger.info(f"关闭时清除数据库缓存: {deleted} 条记录")
+        except Exception as e:
+            logger.warning(f"清除数据库缓存失败: {e}")
+        
         super().closeEvent(event)
 
     def init_ui(self):
