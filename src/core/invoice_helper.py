@@ -1033,14 +1033,17 @@ class InvoiceHelper:
                         seen.add(tid)
                         unique_tax_ids.append(tid)
                 
-                if len(unique_tax_ids) >= 2:
+                # [V3.6.5 修复] 确保购买方和销售方税号不会相同
+                if len(unique_tax_ids) >= 1:
                     if not result["buyer_tax_id"]:
                         result["buyer_tax_id"] = unique_tax_ids[0]
+                    
+                    # 销售方税号：必须与购买方不同
                     if not result["seller_tax_id"]:
-                        result["seller_tax_id"] = unique_tax_ids[1]
-                elif len(unique_tax_ids) == 1:
-                    if not result["buyer_tax_id"]:
-                        result["buyer_tax_id"] = unique_tax_ids[0]
+                        for tid in unique_tax_ids:
+                            if tid != result["buyer_tax_id"]:
+                                result["seller_tax_id"] = tid
+                                break  # 找到第一个不同的就退出
             
             # === 7. 商品名称 ===
             # 匹配 *类别*商品名 格式
