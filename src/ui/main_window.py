@@ -726,38 +726,12 @@ class MainWindow(QMainWindow):
                 buyer = ext.get("buyer", "")
                 buyer_tax_id = ext.get("buyer_tax_id", "")
                 
-                # 如果核心字段缺失，尝试从PDF重新解析
-                file_path = x.get("p", "")
-                if file_path and file_path.lower().endswith(".pdf"):
-                    need_reparse = not code or not number or not seller or not seller_tax_id
-                    if need_reparse:
-                        try:
-                            from src.core.invoice_helper import InvoiceHelper
-                            # 重新解析PDF获取缺失字段
-                            reparse_result = InvoiceHelper.parse_invoice_local(file_path)
-                            logger.info(f"[导出补充] 重新解析: code={reparse_result.get('code')}, number={reparse_result.get('number')}, seller={reparse_result.get('seller')}, seller_tax_id={reparse_result.get('seller_tax_id')}")
-                            if reparse_result:
-                                # 只补充缺失的字段，不覆盖已有的
-                                if not code and reparse_result.get("code"):
-                                    code = reparse_result["code"]
-                                    logger.info(f"  补充 code = {code}")
-                                if not number and reparse_result.get("number"):
-                                    number = reparse_result["number"]
-                                    logger.info(f"  补充 number = {number}")
-                                if not check_code and reparse_result.get("check_code"):
-                                    check_code = reparse_result["check_code"]
-                                if not seller and reparse_result.get("seller"):
-                                    seller = reparse_result["seller"]
-                                    logger.info(f"  补充 seller = {seller}")
-                                if not seller_tax_id and reparse_result.get("seller_tax_id"):
-                                    seller_tax_id = reparse_result["seller_tax_id"]
-                                    logger.info(f"  补充 seller_tax_id = {seller_tax_id}")
-                                if not buyer and reparse_result.get("buyer"):
-                                    buyer = reparse_result["buyer"]
-                                if not buyer_tax_id and reparse_result.get("buyer_tax_id"):
-                                    buyer_tax_id = reparse_result["buyer_tax_id"]
-                        except Exception as e:
-                            logger.warning(f"导出时重新解析失败: {e}")
+                # [暂时禁用] 重新解析逻辑导致导出按钮无响应，需要进一步调试
+                # file_path = x.get("p", "")
+                # if file_path and file_path.lower().endswith(".pdf"):
+                #     need_reparse = not code or not number or not seller or not seller_tax_id
+                #     if need_reparse:
+                #         ... 重新解析逻辑 ...
                 
                 # 标准导出字段
                 row_data = {
