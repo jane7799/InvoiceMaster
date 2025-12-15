@@ -231,6 +231,7 @@ class InvoiceHelper:
         except Exception:
             return img
     
+    @staticmethod
     def scan_invoice_qrcode(file_path):
         """扫描发票二维码获取结构化数据
         
