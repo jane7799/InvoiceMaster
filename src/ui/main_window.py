@@ -368,11 +368,17 @@ class MainWindow(QMainWindow):
             s = QSettings("MySoft", "InvoiceMaster")
             ak, sk = s.value("ak"), s.value("sk")
             
+            # 显示导入进度对话框
+            import_progress = ProgressDialog(self, "发票导入中", can_cancel=False)
+            import_progress.show()
+            QApplication.processEvents()
+            
             # 先同步添加所有文件到列表（快速响应用户）
             files_with_index = []
             start_idx = len(self.data)
             
             added_count = 0
+            total_files = len(fs)
             
             for i, f in enumerate(fs):
                 try:
@@ -387,6 +393,10 @@ class MainWindow(QMainWindow):
                     #     continue
 
                     logger.info(f"添加文件: {basename}")
+                    
+                    # 更新导入进度
+                    import_progress.update_progress(i + 1, total_files, basename)
+                    
                     d = {"p": f, "n": basename, "d": "", "a": 0.0, "ext": {}, "_pending_ocr": True}
                     
                     # 本地解析完整发票信息
@@ -451,6 +461,9 @@ class MainWindow(QMainWindow):
                     logger.error(f"处理单个文件失败 {f}: {str(inner_e)}", exc_info=True)
                     continue
 
+            # 关闭导入进度对话框
+            import_progress.close()
+            
             self.calc()
             self.show_layout_preview()
             QApplication.processEvents()
