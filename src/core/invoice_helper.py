@@ -1002,8 +1002,10 @@ class InvoiceHelper:
             
             # 方法3：兜底 - 如果仍然没有，按文本出现顺序（传统格式购买方在前）
             if not result["buyer_tax_id"] or not result["seller_tax_id"]:
-                # 只提取15-18位的有效税号（排除8位发票号码和20位校验码/全电号码）
-                tax_ids = re.findall(r'(?<![A-Za-z0-9])([A-Za-z0-9]{15,18})(?![A-Za-z0-9])', text)
+                # 提取15-20位的有效税号（排除纯数字的20位全电发票号码）
+                tax_ids = re.findall(r'(?<![A-Za-z0-9])([A-Za-z0-9]{15,20})(?![A-Za-z0-9])', text)
+                # 过滤：排除纯数字20位（全电发票号码）
+                tax_ids = [tid for tid in tax_ids if not (tid.isdigit() and len(tid) == 20)]
                 # 去重
                 seen = set()
                 unique_tax_ids = []
@@ -1167,15 +1169,15 @@ class InvoiceHelper:
                                             seller_name = m_company.group(1).strip()
                                     
                                     # 提取税号（统一社会信用代码）
-                                    # 税号特征：18位字母数字组合，通常以字母或数字开头
+                                    # 税号特征：15-20位字母数字组合
                                     # 发票号码：8位或20位纯数字（需排除）
-                                    m_tax = re.search(r'([A-Za-z0-9]{15,18})', text)
+                                    m_tax = re.search(r'([A-Za-z0-9]{15,20})', text)
                                     if m_tax:
                                         tax_id = m_tax.group(1)
-                                        # 排除8位和20位纯数字（发票号码）
-                                        is_invoice_number = (len(tax_id) in [8, 20]) and tax_id.isdigit()
-                                        # 税号应该包含字母或者是15-18位数字
-                                        is_valid_tax = len(tax_id) >= 15 and len(tax_id) <= 18
+                                        # 排除纯数字的8位和20位数字（发票号码/校验码）
+                                        is_invoice_number = tax_id.isdigit() and len(tax_id) in [8, 20]
+                                        # 税号应该是15-20位
+                                        is_valid_tax = 15 <= len(tax_id) <= 20
                                         if is_valid_tax and not is_invoice_number:
                                             if is_left and not buyer_tax:
                                                 buyer_tax = tax_id
