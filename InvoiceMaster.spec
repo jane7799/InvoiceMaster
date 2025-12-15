@@ -1,12 +1,29 @@
 # InvoiceMaster 打包配置
 # 用于创建 Windows 独立可执行文件
+import os
+import sys
 
 block_cipher = None
+
+# 收集 pyzbar DLL 依赖
+pyzbar_binaries = []
+try:
+    import pyzbar
+    pyzbar_dir = os.path.dirname(pyzbar.__file__)
+    # pyzbar 需要的 DLL 文件列表
+    dll_files = ['libiconv.dll', 'libzbar-64.dll', 'libzbar-32.dll', 'libzbar.dll']
+    for dll in dll_files:
+        dll_path = os.path.join(pyzbar_dir, dll)
+        if os.path.exists(dll_path):
+            # (源文件路径, 目标目录)
+            pyzbar_binaries.append((dll_path, 'pyzbar'))
+except ImportError:
+    pass
 
 a = Analysis(
     ['InvoiceMaster.py'],
     pathex=[],
-    binaries=[],
+    binaries=pyzbar_binaries,
     datas=[
         ('src/core/license_manager.py', 'src/core'),
         ('qr1.jpg', '.'),
