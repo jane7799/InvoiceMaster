@@ -852,7 +852,6 @@ class MainWindow(QMainWindow):
                         key = f"NUM:{invoice_num}|{invoice_date}|{invoice_amount}"
                     elif file_path:
                         # 备选使用：文件名 + 金额（针对没有解析出发票号码的情况）
-                        import os
                         filename = os.path.basename(str(file_path))
                         key = f"FILE:{filename}|{invoice_amount}"
                     else:
