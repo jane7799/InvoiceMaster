@@ -1,5 +1,6 @@
 
 import os
+import time
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                            QProgressBar, QPushButton, QFrame, QLineEdit,
                            QMessageBox, QWidget, QGraphicsDropShadowEffect, QApplication)
@@ -11,19 +12,26 @@ from src.utils.icons import Icons
 # For now, sticking to hardcoded values or simplified logic.
 
 class ProgressDialog(QDialog):
-    """异步操作进度对话框"""
+    """异步操作进度对话框 [V3.6 增强版]
+    
+    新增功能：
+    - 预计剩余时间
+    - 处理速度（件/秒）
+    - 成功/失败计数
+    - 当前文件名显示
+    """
     cancelled = pyqtSignal()
     
     def __init__(self, parent, title="处理中", can_cancel=True):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
-        self.setFixedSize(420, 180)
+        self.setFixedSize(480, 240)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(15)
+        layout.setSpacing(12)
         
         # 标题标签
         self.title_label = QLabel(title)
@@ -56,6 +64,34 @@ class ProgressDialog(QDialog):
         """)
         layout.addWidget(self.progress_bar)
         
+        # 详细统计信息行
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(20)
+        
+        # 进度数
+        self.count_label = QLabel("0/0")
+        self.count_label.setStyleSheet("font-size: 12px; color: #64748B; font-weight: 500;")
+        stats_layout.addWidget(self.count_label)
+        
+        # 成功/失败计数
+        self.result_label = QLabel("✅ 0  ❌ 0")
+        self.result_label.setStyleSheet("font-size: 12px; color: #64748B;")
+        stats_layout.addWidget(self.result_label)
+        
+        stats_layout.addStretch()
+        
+        # 处理速度
+        self.speed_label = QLabel("")
+        self.speed_label.setStyleSheet("font-size: 12px; color: #64748B;")
+        stats_layout.addWidget(self.speed_label)
+        
+        # 预计剩余时间
+        self.eta_label = QLabel("")
+        self.eta_label.setStyleSheet("font-size: 12px; color: #3B82F6; font-weight: 500;")
+        stats_layout.addWidget(self.eta_label)
+        
+        layout.addLayout(stats_layout)
+        
         # 按钮布局
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -82,6 +118,9 @@ class ProgressDialog(QDialog):
         layout.addLayout(btn_layout)
         
         self._is_cancelled = False
+        self._start_time = time.time()
+        self._success_count = 0
+        self._error_count = 0
         
     def _on_cancel(self):
         self._is_cancelled = True
@@ -90,16 +129,63 @@ class ProgressDialog(QDialog):
         self.cancel_btn.setEnabled(False)
         
     def update_progress(self, current, total, filename=""):
+        """更新进度（增强版）"""
         percent = int((current / total) * 100) if total > 0 else 0
         self.progress_bar.setValue(percent)
-        self.file_label.setText(f"正在处理 ({current}/{total}): {filename}")
+        
+        # 文件名（截断过长的文件名）
+        display_name = filename[:35] + "..." if len(filename) > 38 else filename
+        self.file_label.setText(f"正在处理: {display_name}")
+        
+        # 进度数
+        self.count_label.setText(f"{current}/{total}")
+        
+        # 计算速度和预计剩余时间
+        elapsed = time.time() - self._start_time
+        if elapsed > 0 and current > 0:
+            speed = current / elapsed
+            self.speed_label.setText(f"⚡ {speed:.1f} 件/秒")
+            
+            remaining = total - current
+            if speed > 0:
+                eta_seconds = remaining / speed
+                if eta_seconds < 60:
+                    self.eta_label.setText(f"⏱️ 约 {int(eta_seconds)} 秒")
+                else:
+                    self.eta_label.setText(f"⏱️ 约 {int(eta_seconds/60)} 分钟")
+            else:
+                self.eta_label.setText("")
+        
+        # 更新成功/失败计数
+        self.result_label.setText(f"✅ {self._success_count}  ❌ {self._error_count}")
+        
         QApplication.processEvents()
+    
+    def record_success(self):
+        """记录成功处理"""
+        self._success_count += 1
+        self.result_label.setText(f"✅ {self._success_count}  ❌ {self._error_count}")
+        
+    def record_error(self):
+        """记录处理失败"""
+        self._error_count += 1
+        self.result_label.setText(f"✅ {self._success_count}  ❌ {self._error_count}")
         
     def set_title(self, title):
         self.title_label.setText(title)
         
     def is_cancelled(self):
         return self._is_cancelled
+    
+    def get_statistics(self):
+        """获取处理统计"""
+        elapsed = time.time() - self._start_time
+        return {
+            "success": self._success_count,
+            "error": self._error_count,
+            "elapsed_seconds": elapsed,
+            "speed": (self._success_count + self._error_count) / elapsed if elapsed > 0 else 0
+        }
 
 class ActivationDialog(QDialog):
     """激活管理对话框"""
