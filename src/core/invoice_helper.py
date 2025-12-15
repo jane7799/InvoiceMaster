@@ -842,31 +842,60 @@ class InvoiceHelper:
             # - "合计" = 不含税金额（金额列的合计）
             # - "价税合计" 或 "（小写）" = 含税总金额（我们要的）
             
-            # 方法1：匹配"（小写）¥22.50"格式（最可靠）
+            # 方法1：匹配"（小写）¥65.52"格式（最可靠）
             m_xiaoxie = re.search(r'[（\(]\s*小写\s*[）\)]\s*[¥￥]\s*([0-9,，]+\.\d{2})', text)
             if m_xiaoxie:
                 result["amount"] = float(m_xiaoxie.group(1).replace(",", "").replace("，", ""))
             
-            # 方法2：匹配"小写）¥22.50"格式（括号可能缺失）
+            # 方法2：匹配"小写）¥65.52"格式（括号可能缺失）
             if result["amount"] == 0:
                 m_xiaoxie2 = re.search(r'小写[）\)]\s*[¥￥]\s*([0-9,，]+\.\d{2})', text)
                 if m_xiaoxie2:
                     result["amount"] = float(m_xiaoxie2.group(1).replace(",", "").replace("，", ""))
             
-            # 方法3：匹配"价税合计"后的金额
+            # 方法3：匹配"小写"后任意字符再跟"¥xx.xx"（处理PDF分行提取）
+            if result["amount"] == 0:
+                m_xiaoxie3 = re.search(r'小写[^0-9¥￥]{0,20}[¥￥]\s*([0-9,，]+\.\d{2})', text)
+                if m_xiaoxie3:
+                    result["amount"] = float(m_xiaoxie3.group(1).replace(",", "").replace("，", ""))
+            
+            # 方法4：匹配"价税合计"后的金额
             if result["amount"] == 0:
                 m_total = re.search(r'价税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*([0-9,，]+\.\d{2})', text)
                 if m_total:
                     result["amount"] = float(m_total.group(1).replace(",", "").replace("，", ""))
             
-            # 方法4：如果以上都失败，找所有¥符号后的金额，取最大的
+            # 方法5：先找"合计"行的¥金额，再找比它大的¥金额（价税合计 = 合计 + 税额）
             if result["amount"] == 0:
+                # 找到"合计"行的金额（不含税）
+                m_heji = re.search(r'合\s*计[^价税\n]*[¥￥]\s*([0-9,，]+\.\d{2})', text)
+                heji_amount = 0
+                if m_heji:
+                    try:
+                        heji_amount = float(m_heji.group(1).replace(",", "").replace("，", ""))
+                    except:
+                        pass
+                
+                # 找所有¥金额，取比"合计"大的那个（应该是价税合计）
                 amounts = re.findall(r'[¥￥]\s*([0-9,，]+\.\d{2})', text)
                 if amounts:
-                    valid = [float(x.replace(",", "").replace("，", "")) for x in amounts]
-                    # 过滤掉极大值和极小值
-                    valid = [x for x in valid if 0.01 < x < 100000000]
-                    if valid:
+                    valid = []
+                    for x in amounts:
+                        try:
+                            val = float(x.replace(",", "").replace("，", ""))
+                            if 0.01 < val < 100000000:
+                                valid.append(val)
+                        except:
+                            pass
+                    
+                    if heji_amount > 0 and valid:
+                        # 找比合计大的金额（价税合计）
+                        larger = [v for v in valid if v > heji_amount]
+                        if larger:
+                            result["amount"] = min(larger)  # 取最接近合计的那个
+                        else:
+                            result["amount"] = max(valid)
+                    elif valid:
                         result["amount"] = max(valid)
             
             # 提取不含税金额（"合计"行，不是"价税合计"）
