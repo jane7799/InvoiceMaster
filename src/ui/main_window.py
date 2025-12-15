@@ -853,26 +853,37 @@ class MainWindow(QMainWindow):
                         ws.column_dimensions[get_column_letter(i)].width = field_widths[field]
                 
                 # 检测重复发票：发票号码 + 开票日期 + 金额 三者都相同才算重复
+                # [V3.6.5] 增强：如果发票号码为空，使用文件名+金额作为备选
                 invoice_keys = {}
                 duplicate_rows = set()
                 num_col_idx = col_map.get("发票号码")
                 date_col_idx = col_map.get("开票日期")
                 amount_col_idx = col_map.get("价税合计")
+                path_col_idx = col_map.get("文件路径")
                 
-                if num_col_idx:
-                    for row_idx in range(2, ws.max_row + 1):
-                        invoice_num = ws.cell(row=row_idx, column=num_col_idx).value
-                        invoice_date = ws.cell(row=row_idx, column=date_col_idx).value if date_col_idx else ""
-                        invoice_amount = ws.cell(row=row_idx, column=amount_col_idx).value if amount_col_idx else ""
-                        
-                        # 组合键：号码+日期+金额
-                        if invoice_num and str(invoice_num).strip():
-                            key = f"{invoice_num}|{invoice_date}|{invoice_amount}"
-                            if key in invoice_keys:
-                                duplicate_rows.add(row_idx)
-                                duplicate_rows.add(invoice_keys[key])
-                            else:
-                                invoice_keys[key] = row_idx
+                for row_idx in range(2, ws.max_row + 1):
+                    invoice_num = ws.cell(row=row_idx, column=num_col_idx).value if num_col_idx else ""
+                    invoice_date = ws.cell(row=row_idx, column=date_col_idx).value if date_col_idx else ""
+                    invoice_amount = ws.cell(row=row_idx, column=amount_col_idx).value if amount_col_idx else ""
+                    file_path = ws.cell(row=row_idx, column=path_col_idx).value if path_col_idx else ""
+                    
+                    # 构建唯一键
+                    if invoice_num and str(invoice_num).strip():
+                        # 优先使用：发票号码 + 日期 + 金额
+                        key = f"NUM:{invoice_num}|{invoice_date}|{invoice_amount}"
+                    elif file_path:
+                        # 备选使用：文件名 + 金额（针对没有解析出发票号码的情况）
+                        import os
+                        filename = os.path.basename(str(file_path))
+                        key = f"FILE:{filename}|{invoice_amount}"
+                    else:
+                        continue  # 没有任何可判断的信息，跳过
+                    
+                    if key in invoice_keys:
+                        duplicate_rows.add(row_idx)
+                        duplicate_rows.add(invoice_keys[key])
+                    else:
+                        invoice_keys[key] = row_idx
                 
                 # 金额列索引
                 amount_cols = [col_map.get(f) for f in ["不含税金额", "税额", "价税合计"] if f in col_map]
