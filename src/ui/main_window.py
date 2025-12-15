@@ -735,18 +735,23 @@ class MainWindow(QMainWindow):
                             from src.core.invoice_helper import InvoiceHelper
                             # 重新解析PDF获取缺失字段
                             reparse_result = InvoiceHelper.parse_invoice_local(file_path)
+                            logger.info(f"[导出补充] 重新解析: code={reparse_result.get('code')}, number={reparse_result.get('number')}, seller={reparse_result.get('seller')}, seller_tax_id={reparse_result.get('seller_tax_id')}")
                             if reparse_result:
                                 # 只补充缺失的字段，不覆盖已有的
                                 if not code and reparse_result.get("code"):
                                     code = reparse_result["code"]
+                                    logger.info(f"  补充 code = {code}")
                                 if not number and reparse_result.get("number"):
                                     number = reparse_result["number"]
+                                    logger.info(f"  补充 number = {number}")
                                 if not check_code and reparse_result.get("check_code"):
                                     check_code = reparse_result["check_code"]
                                 if not seller and reparse_result.get("seller"):
                                     seller = reparse_result["seller"]
+                                    logger.info(f"  补充 seller = {seller}")
                                 if not seller_tax_id and reparse_result.get("seller_tax_id"):
                                     seller_tax_id = reparse_result["seller_tax_id"]
+                                    logger.info(f"  补充 seller_tax_id = {seller_tax_id}")
                                 if not buyer and reparse_result.get("buyer"):
                                     buyer = reparse_result["buyer"]
                                 if not buyer_tax_id and reparse_result.get("buyer_tax_id"):
