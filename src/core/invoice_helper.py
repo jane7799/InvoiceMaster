@@ -14,13 +14,15 @@ except ImportError:
     _PYZBAR_AVAILABLE = False
 
 class InvoiceHelper:
-    # 中文大写数字映射
+    # 中文大写数字映射（注意：零/〇是占位符，单独处理）
     CN_NUM_MAP = {
-        '零': 0, '壹': 1, '贰': 2, '叁': 3, '肆': 4,
+        '壹': 1, '贰': 2, '叁': 3, '肆': 4,
         '伍': 5, '陆': 6, '柒': 7, '捌': 8, '玖': 9,
-        '〇': 0, '一': 1, '二': 2, '三': 3, '四': 4,
+        '一': 1, '二': 2, '三': 3, '四': 4,
         '五': 5, '六': 6, '七': 7, '八': 8, '九': 9,
     }
+    # 零/〇作为占位符，表示跳过当前位
+    CN_ZERO = {'零', '〇'}
     CN_UNIT_MAP = {
         '拾': 10, '佰': 100, '仟': 1000, '万': 10000, '亿': 100000000,
         '十': 10, '百': 100, '千': 1000,
@@ -31,6 +33,7 @@ class InvoiceHelper:
         """解析中文大写金额（如：壹佰贰拾叁元肆角伍分）
         
         返回浮点数金额，解析失败返回 None
+        注意：零/〇是占位符，如"壹佰零叁"=103
         """
         if not text or not isinstance(text, str):
             return None
@@ -73,7 +76,11 @@ class InvoiceHelper:
             current = 0  # 当前累积值
             
             for char in yuan_part:
-                if char in InvoiceHelper.CN_NUM_MAP:
+                if char in InvoiceHelper.CN_ZERO:
+                    # 零/〇是占位符，表示前一个数字已处理完，重置current
+                    # 例如：壹佰零叁 → 100 + 3 = 103
+                    current = 0
+                elif char in InvoiceHelper.CN_NUM_MAP:
                     current = InvoiceHelper.CN_NUM_MAP[char]
                 elif char in InvoiceHelper.CN_UNIT_MAP:
                     unit = InvoiceHelper.CN_UNIT_MAP[char]
