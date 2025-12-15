@@ -27,13 +27,33 @@ jobs:
           pip install pdfplumber pandas requests openpyxl pymupdf==1.23.26
           # 【关键】锁定 PyQt6 版本以支持 Win7
           pip install PyQt6==6.1.0 PyQt6-Qt6==6.1.0 PyQt6-sip==13.1.0
+          # 【修复 cv2 报错】安装 OpenCV 和 pyzbar
+          pip install opencv-python-headless pyzbar
           pip uninstall -y pathlib || true
+          
+      - name: Collect pyzbar DLLs
+        run: |
+          # 【修复 libiconv.dll 报错】收集 pyzbar 的 DLL 依赖
+          python -c "import pyzbar; import os; import shutil; pyzbar_dir = os.path.dirname(pyzbar.__file__); dlls = [f for f in os.listdir(pyzbar_dir) if f.endswith('.dll')]; print('Found DLLs:', dlls); [shutil.copy(os.path.join(pyzbar_dir, d), d) for d in dlls]"
+          dir *.dll
+        shell: pwsh
           
       - name: Build Win7 EXE
         run: |
           python -m pip uninstall -y pathlib || true
+          # 获取 pyzbar 路径并收集 DLL
+          $pyzbarPath = python -c "import pyzbar; import os; print(os.path.dirname(pyzbar.__file__))"
+          $dllArgs = ""
+          Get-ChildItem -Path $pyzbarPath -Filter "*.dll" | ForEach-Object {
+            $dllArgs += " --add-binary `"$($_.FullName);pyzbar`""
+          }
           # 【关键】--add-data 把二维码打包进去 (Windows用分号;)
-          python -m PyInstaller --name "智能发票管理助手_Win7兼容版" --windowed --onefile --clean --noconfirm --icon="logo.ico" --add-data "qr1.jpg;." --add-data "qr2.jpg;." --add-data "icon_1x1_l.png;." --add-data "icon_1x1_p.png;." --add-data "icon_1x2_l.png;." --add-data "icon_1x2_p.png;." --add-data "icon_2x2_l.png;." --add-data "icon_2x2_p.png;." InvoiceMaster.py
+          # 【关键】--hidden-import 添加 cv2 和 pyzbar 以修复 ModuleNotFoundError
+          # 【修复】--add-binary 添加 pyzbar DLL 以修复 libiconv.dll 报错
+          $cmd = "python -m PyInstaller --name `"智能发票管理助手_Win7兼容版`" --windowed --onefile --clean --noconfirm --icon=`"logo.ico`" --add-data `"qr1.jpg;.`" --add-data `"qr2.jpg;.`" --add-data `"icon_1x1_l.png;.`" --add-data `"icon_1x1_p.png;.`" --add-data `"icon_1x2_l.png;.`" --add-data `"icon_1x2_p.png;.`" --add-data `"icon_2x2_l.png;.`" --add-data `"icon_2x2_p.png;.`" --hidden-import=cv2 --hidden-import=pyzbar --hidden-import=pyzbar.pyzbar$dllArgs InvoiceMaster.py"
+          Write-Host "Running: $cmd"
+          Invoke-Expression $cmd
+        shell: pwsh
           
       - name: Upload Win7 Artifact
         uses: actions/upload-artifact@v4
