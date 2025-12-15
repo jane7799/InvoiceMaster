@@ -301,12 +301,15 @@ class InvoiceHelper:
                         parts = data.split(',')
                         if len(parts) >= 6:
                             # 标准格式：01,10,发票代码,发票号码,金额,日期,校验码
+                            # [V3.6.3 修复] 注意：二维码中的金额通常是不含税金额！
+                            # 需要标记为"可能不含税"，后续验证
                             return {
                                 "code": parts[2] if len(parts) > 2 else "",
                                 "number": parts[3] if len(parts) > 3 else "",
                                 "amount": float(parts[4]) if len(parts) > 4 and parts[4] else 0.0,
                                 "date": parts[5] if len(parts) > 5 else "",
                                 "check_code": parts[6] if len(parts) > 6 else "",
+                                "_qr_amount_type": "standard",  # 标准格式，金额可能是不含税
                             }
                         
                         # 非标准格式：可能包含"合计金额 ¥100（含税）"或"合计金额 ¥100（未含税）"
@@ -838,36 +841,44 @@ class InvoiceHelper:
                 result["invoice_type"] = "增值税发票"
             
             # === 2. 金额提取（核心逻辑）===
-            # 增值税发票关键点：必须区分"合计"和"价税合计"
-            # - "合计" = 不含税金额（金额列的合计）
-            # - "价税合计" 或 "（小写）" = 含税总金额（我们要的）
+            # [V3.6.3] 优化策略：优先在"价税合计（小写）"位置找金额
+            # 增值税发票关键点：
+            # - "合计" = 不含税金额
+            # - "价税合计（小写）" = 含税总金额（最可靠）✅
             
-            # 方法1：匹配"（小写）¥65.52"格式（最可靠）
-            m_xiaoxie = re.search(r'[（\(]\s*小写\s*[）\)]\s*[¥￥]\s*([0-9,，]+\.\d{2})', text)
-            if m_xiaoxie:
-                result["amount"] = float(m_xiaoxie.group(1).replace(",", "").replace("，", ""))
+            # 优先级1：价税合计 + 小写 组合（最可靠）
+            # 匹配"价税合计"附近的"(小写)¥65.52"或"小写¥65.52"
+            # [V3.6.3] 增大距离限制到200字符，兼容PDF文本分散提取
+            m_combined = re.search(r'价税[^¥￥]{0,200}[（\(]?\s*小写\s*[）\)]?\s*[¥￥]\s*([0-9,，]+\.\d{2})', text)
+            if m_combined:
+                result["amount"] = float(m_combined.group(1).replace(",", "").replace("，", ""))
             
-            # 方法2：匹配"小写）¥65.52"格式（括号可能缺失）
+            # 优先级2：大写金额（价税合计的中文表示）
             if result["amount"] == 0:
-                m_xiaoxie2 = re.search(r'小写[）\)]\s*[¥￥]\s*([0-9,，]+\.\d{2})', text)
+                cn_amount = InvoiceHelper.parse_chinese_amount(text)
+                if cn_amount and cn_amount > 0:
+                    result["amount"] = cn_amount
+            
+            # 优先级3：单独匹配"(小写)¥xx.xx"
+            if result["amount"] == 0:
+                m_xiaoxie = re.search(r'[（\(]\s*小写\s*[）\)]\s*[¥￥]\s*([0-9,，]+\.\d{2})', text)
+                if m_xiaoxie:
+                    result["amount"] = float(m_xiaoxie.group(1).replace(",", "").replace("，", ""))
+            
+            # 优先级4：宽松匹配"小写"后的金额
+            if result["amount"] == 0:
+                m_xiaoxie2 = re.search(r'小写[^0-9¥￥]{0,20}[¥￥]\s*([0-9,，]+\.\d{2})', text)
                 if m_xiaoxie2:
                     result["amount"] = float(m_xiaoxie2.group(1).replace(",", "").replace("，", ""))
             
-            # 方法3：匹配"小写"后任意字符再跟"¥xx.xx"（处理PDF分行提取）
-            if result["amount"] == 0:
-                m_xiaoxie3 = re.search(r'小写[^0-9¥￥]{0,20}[¥￥]\s*([0-9,，]+\.\d{2})', text)
-                if m_xiaoxie3:
-                    result["amount"] = float(m_xiaoxie3.group(1).replace(",", "").replace("，", ""))
-            
-            # 方法4：匹配"价税合计"后的金额
+            # 优先级5：单独匹配"价税合计"
             if result["amount"] == 0:
                 m_total = re.search(r'价税\s*合\s*计[^0-9¥￥]*[¥￥]?\s*([0-9,，]+\.\d{2})', text)
                 if m_total:
                     result["amount"] = float(m_total.group(1).replace(",", "").replace("，", ""))
             
-            # 方法5：先找"合计"行的¥金额，再找比它大的¥金额（价税合计 = 合计 + 税额）
+            # 优先级6：智能比对（找比"合计"大的金额）
             if result["amount"] == 0:
-                # 找到"合计"行的金额（不含税）
                 m_heji = re.search(r'合\s*计[^价税\n]*[¥￥]\s*([0-9,，]+\.\d{2})', text)
                 heji_amount = 0
                 if m_heji:
@@ -876,7 +887,6 @@ class InvoiceHelper:
                     except:
                         pass
                 
-                # 找所有¥金额，取比"合计"大的那个（应该是价税合计）
                 amounts = re.findall(r'[¥￥]\s*([0-9,，]+\.\d{2})', text)
                 if amounts:
                     valid = []
@@ -889,27 +899,13 @@ class InvoiceHelper:
                             pass
                     
                     if heji_amount > 0 and valid:
-                        # 找比合计大的金额（价税合计）
                         larger = [v for v in valid if v > heji_amount]
                         if larger:
-                            result["amount"] = min(larger)  # 取最接近合计的那个
+                            result["amount"] = min(larger)
                         else:
                             result["amount"] = max(valid)
                     elif valid:
                         result["amount"] = max(valid)
-            
-            # [V3.6.2] 大写金额验证和补充
-            # 解析"价税合计（大写）"后的中文金额，如"陆拾伍元伍角贰分" = 65.52
-            cn_amount = InvoiceHelper.parse_chinese_amount(text)
-            if cn_amount and cn_amount > 0:
-                current_amount = result.get("amount", 0)
-                if current_amount == 0:
-                    # 没有找到金额，使用大写金额
-                    result["amount"] = cn_amount
-                elif abs(cn_amount - current_amount) > 0.01:
-                    # 大写金额与当前金额不一致，通常大写更可靠
-                    # 选择较大的那个（价税合计应该是最大的）
-                    result["amount"] = max(cn_amount, current_amount)
             
             # 提取不含税金额（"合计"行，不是"价税合计"）
             m_without_tax = re.search(r'(?<!价税)\s*合\s*计[^价税0-9¥￥]*[¥￥]?\s*([0-9,，]+\.\d{2})', text)
@@ -1024,17 +1020,28 @@ class InvoiceHelper:
             # 处理二维码中的金额
             qr_amount = qr_data.get("amount", 0.0)
             
-            # 检查二维码是否明确标记为"未含税"金额
-            if qr_data.get("_qr_has_tax_info") and qr_data.get("_qr_is_tax_inclusive") == False:
-                # [V3.6.2] 二维码明确标记为"未含税"，存储用于后续验证
+            # [V3.6.3 修复] 二维码金额处理逻辑
+            # 1. 明确标记为"含税" → 直接使用
+            # 2. 明确标记为"未含税/不含税" → 存储，继续找价税合计
+            # 3. 标准格式(逗号分隔) → 金额是不含税的，存储，继续找价税合计
+            
+            qr_is_tax_inclusive = False  # 默认认为不含税
+            
+            if qr_data.get("_qr_has_tax_info"):
+                # 有明确的税标记
+                if qr_data.get("_qr_is_tax_inclusive") == True:
+                    qr_is_tax_inclusive = True
+            
+            if qr_is_tax_inclusive:
+                # 含税金额，直接使用
+                result["amount"] = qr_amount
+            else:
+                # 不含税金额（标准格式或明确标记），存储用于验证
                 if qr_amount > 0:
                     result["amount_without_tax"] = str(qr_amount)
-                    qr_tax_exclusive_amount = qr_amount  # 记录不含税金额
+                    qr_tax_exclusive_amount = qr_amount
                 qr_amount_is_tax_exclusive = True
-                # 后续会从文本中提取价税合计作为主金额
-            else:
-                # 标准格式或含税金额，直接作为主金额
-                result["amount"] = qr_amount
+                # 后续会从PDF文本中提取价税合计
             
             # 日期格式转换：二维码中可能是 YYYYMMDD
             qr_date = qr_data.get("date", "")
