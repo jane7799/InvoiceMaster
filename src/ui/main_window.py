@@ -20,7 +20,7 @@ from PyQt6.QtCore import QSettings
 from src.core.invoice_helper import InvoiceHelper
 from src.core.pdf_engine import PDFEngine
 from src.core.workers import OcrWorker, PdfWorker, PrintWorker
-from src.core.license_manager import LicenseManager
+# 激活功能已移除
 from src.core.database import get_db
 from src.themes.theme_manager import ThemeManager
 from src.utils.log_manager import LogManager
@@ -29,7 +29,7 @@ from src.utils.constants import APP_NAME, APP_VERSION, APP_AUTHOR_CN
 from src.utils.utils import resource_path
 from src.utils.config import UI_CONFIG
 
-from src.ui.dialogs import ProgressDialog, AboutDialog, ActivationDialog
+from src.ui.dialogs import ProgressDialog, AboutDialog
 from src.ui.settings_dialog import SettingsDlg
 from src.ui.statistics_dialog import StatisticsDialog
 from src.ui.widgets import Card, DragArea, InvoiceItemWidget
@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         self.preview_timer = QTimer(); self.preview_timer.setSingleShot(True); self.preview_timer.timeout.connect(self.generate_realtime_preview)
         self.current_printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         self.right_panel = None; self.settings_card = None
-        self.license_manager = LicenseManager()
+        # 激活功能已移除
         
         # 异步工作线程引用
         self.ocr_worker = None
@@ -609,28 +609,7 @@ class MainWindow(QMainWindow):
         logger = logging.getLogger(__name__)
         if not self.data: return
         
-        # 检查激活状态
-        info = self.license_manager.get_activation_info()
-        if not info['is_activated']:
-            if info['remaining_trials'] <= 0:
-                # 试用次数用完，必须激活
-                QMessageBox.warning(self, "需要激活", "试用次数已用完，请激活软件后继续使用。")
-                dialog = ActivationDialog(self, self.license_manager)
-                if dialog.exec() != QDialog.DialogCode.Accepted:
-                    return
-                # 激活成功后继续
-            else:
-                # 还有试用次数，显示提示并询问是否继续
-                remaining = info['remaining_trials']
-                reply = QMessageBox.question(
-                    self, 
-                    "试用提示", 
-                    f"您还有 {remaining} 次免费导出机会。\n\n是否继续导出？\n（导出成功后将使用1次机会）",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.Yes
-                )
-                if reply != QMessageBox.StandardButton.Yes:
-                    return  # 用户选择不继续，直接返回，不扣次数
+        # 激活功能已移除，直接进行导出
         
         logger.info(f"开始导出 Excel: {len(self.data)} 条数据")
         
@@ -954,11 +933,7 @@ class MainWindow(QMainWindow):
                 
                 msg += "🔒 工作表已保护，仅允许查看和复制"
                 
-                # 导出成功后，扣除试用次数（如果未激活）
-                info = self.license_manager.get_activation_info()
-                if not info['is_activated']:
-                    self.license_manager.increment_trial_count()
-                    logger.info("试用次数已扣除")
+                # 激活功能已移除
                 
                 QMessageBox.information(self, "导出成功", msg)
                 

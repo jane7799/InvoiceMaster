@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                            QGraphicsDropShadowEffect, QMessageBox)
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import QSettings
-from src.ui.dialogs import ActivationDialog
+# 激活功能已移除
 from src.utils.icons import Icons
 
 class SettingsDlg(QDialog):
@@ -47,7 +47,7 @@ class SettingsDlg(QDialog):
         """)
         header_layout.addWidget(title)
         
-        subtitle = QLabel("配置主题、API密钥和授权信息")
+        subtitle = QLabel("配置主题和 API 密钥")
         subtitle.setStyleSheet("""
             font-size: 13px;
             color: rgba(255, 255, 255, 0.9);
@@ -63,84 +63,7 @@ class SettingsDlg(QDialog):
         content_layout.setContentsMargins(30, 30, 30, 30)
         content_layout.setSpacing(20)
         
-        # 激活状态卡片
-        if hasattr(parent, 'license_manager'):
-            activation_card = QFrame()
-            activation_card.setStyleSheet("""
-                QFrame {
-                    background-color: white;
-                    border-radius: 12px;
-                }
-            """)
-            
-            activation_shadow = QGraphicsDropShadowEffect()
-            activation_shadow.setBlurRadius(20)
-            activation_shadow.setColor(QColor(0, 0, 0, 30))
-            activation_shadow.setOffset(0, 2)
-            activation_card.setGraphicsEffect(activation_shadow)
-            
-            activation_layout = QVBoxLayout(activation_card)
-            activation_layout.setContentsMargins(20, 20, 20, 20)
-            activation_layout.setSpacing(15)
-            
-            card_title = QLabel("🔑 Excel 导出授权")
-            card_title.setStyleSheet("""
-                font-size: 15px;
-                font-weight: 600;
-                color: #1E293B;
-            """)
-            activation_layout.addWidget(card_title)
-            
-            info = parent.license_manager.get_activation_info()
-            status_container = QHBoxLayout()
-            
-            if info['is_activated']:
-                activation_status = QLabel("✅ 已激活")
-                activation_status.setStyleSheet("""
-                    color: #10B981;
-                    font-weight: 600;
-                    font-size: 14px;
-                    padding: 8px 16px;
-                    background: #ECFDF5;
-                    border-radius: 6px;
-                """)
-            else:
-                remaining = info['remaining_trials']
-                activation_status = QLabel(f"⚠️ 未激活 (剩余: {remaining}/10次)")
-                activation_status.setStyleSheet("""
-                    color: #F59E0B;
-                    font-weight: 600;
-                    font-size: 14px;
-                    padding: 8px 16px;
-                    background: #FEF3C7;
-                    border-radius: 6px;
-                """)
-            
-            activation_btn = QPushButton("激活管理")
-            activation_btn.setStyleSheet("""
-                QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                        stop:0 #3B82F6, stop:1 #2563EB);
-                    border: none;
-                    color: white;
-                    font-weight: 600;
-                    font-size: 13px;
-                    border-radius: 6px;
-                    padding: 8px 20px;
-                }
-                QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                        stop:0 #2563EB, stop:1 #1D4ED8);
-                }
-            """)
-            activation_btn.clicked.connect(self.open_activation_dialog)
-            
-            status_container.addWidget(activation_status)
-            status_container.addStretch()
-            status_container.addWidget(activation_btn)
-            
-            activation_layout.addLayout(status_container)
-            content_layout.addWidget(activation_card)
+        # 激活功能已移除
         
         # 主题设置卡片
         theme_card = QFrame()
@@ -340,10 +263,7 @@ class SettingsDlg(QDialog):
         
         layout.addWidget(button_container)
     
-    def open_activation_dialog(self):
-        """打开激活管理对话框"""
-        dialog = ActivationDialog(self, self.parent.license_manager)
-        dialog.exec()
+    # 激活功能已移除
     
     def save(self):
         s = QSettings("MySoft", "InvoiceMaster")

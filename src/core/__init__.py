@@ -6,9 +6,9 @@ from .pdf_engine import PDFEngine
 from .print_engine import PrinterEngine
 from .database import InvoiceDatabase
 from .workers import OcrWorker, PdfWorker, PrintWorker
-from .license_manager import LicenseManager
+# LicenseManager 已移除，激活功能不再需要
 
 __all__ = [
     'InvoiceHelper', 'PDFEngine', 'PrinterEngine', 'InvoiceDatabase',
-    'OcrWorker', 'PdfWorker', 'PrintWorker', 'LicenseManager'
+    'OcrWorker', 'PdfWorker', 'PrintWorker'
 ]
