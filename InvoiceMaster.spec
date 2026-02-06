@@ -2,6 +2,7 @@
 # 用于创建 Windows 独立可执行文件
 import os
 import sys
+import glob
 
 block_cipher = None
 
@@ -10,15 +11,57 @@ pyzbar_binaries = []
 try:
     import pyzbar
     pyzbar_dir = os.path.dirname(pyzbar.__file__)
-    # pyzbar 需要的 DLL 文件列表
-    dll_files = ['libiconv.dll', 'libzbar-64.dll', 'libzbar-32.dll', 'libzbar.dll']
-    for dll in dll_files:
-        dll_path = os.path.join(pyzbar_dir, dll)
-        if os.path.exists(dll_path):
-            # (源文件路径, 目标目录)
-            pyzbar_binaries.append((dll_path, 'pyzbar'))
+    
+    # pyzbar 需要的 DLL 文件列表（包括所有可能的名称变体）
+    dll_files = [
+        'libiconv.dll', 
+        'libiconv-2.dll',
+        'libzbar-64.dll', 
+        'libzbar-32.dll', 
+        'libzbar.dll',
+        'libzbar-0.dll',
+        'zbar.dll',
+    ]
+    
+    # 搜索 DLL 的多个可能位置
+    search_paths = [
+        pyzbar_dir,                                    # pyzbar 包目录
+        os.path.join(pyzbar_dir, 'bin'),              # pyzbar/bin 目录
+        os.path.join(sys.prefix, 'Library', 'bin'),   # Conda 环境
+        os.path.join(sys.prefix, 'Scripts'),          # Python Scripts 目录
+        os.path.join(sys.prefix, 'DLLs'),             # Python DLLs 目录
+    ]
+    
+    # 如果有 CONDA_PREFIX 环境变量，也搜索那里
+    conda_prefix = os.environ.get('CONDA_PREFIX')
+    if conda_prefix:
+        search_paths.append(os.path.join(conda_prefix, 'Library', 'bin'))
+    
+    found_dlls = set()
+    for search_path in search_paths:
+        if os.path.exists(search_path):
+            for dll in dll_files:
+                dll_path = os.path.join(search_path, dll)
+                if os.path.exists(dll_path) and dll not in found_dlls:
+                    found_dlls.add(dll)
+                    # (源文件路径, 目标目录)
+                    pyzbar_binaries.append((dll_path, 'pyzbar'))
+                    print(f"[pyzbar] 找到 DLL: {dll_path}")
+            
+            # 同时收集所有 .dll 文件（以防遗漏）
+            for pattern in ['*.dll']:
+                for dll_path in glob.glob(os.path.join(search_path, pattern)):
+                    dll_name = os.path.basename(dll_path).lower()
+                    if ('zbar' in dll_name or 'iconv' in dll_name) and dll_name not in found_dlls:
+                        found_dlls.add(dll_name)
+                        pyzbar_binaries.append((dll_path, 'pyzbar'))
+                        print(f"[pyzbar] 额外找到 DLL: {dll_path}")
+
+    if not pyzbar_binaries:
+        print("[警告] 未找到 pyzbar DLL 文件，二维码功能可能无法使用")
+        print(f"[警告] 已搜索路径: {search_paths}")
 except ImportError:
-    pass
+    print("[警告] pyzbar 未安装")
 
 a = Analysis(
     ['InvoiceMaster.py'],
