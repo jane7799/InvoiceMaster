@@ -12,7 +12,9 @@ class HandScrollArea(QScrollArea):
         super().__init__()
         self.parent_widget = parent_widget 
         self.setWidgetResizable(True)
-        self.setStyleSheet("background-color: #525659; border: none;")
+        self.setStyleSheet("""
+            QScrollArea { background-color: #3D4248; border: none; border-radius: 12px; }
+        """)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.is_panning = False; self.last_mouse_pos = QPointF()
         self.enable_interaction = True
@@ -54,14 +56,33 @@ class AdvancedPreviewArea(QWidget):
         self.scroll_layout = QVBoxLayout(self.container); self.scroll_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         self.scroll_layout.setSpacing(30); self.scroll_layout.setContentsMargins(20, 20, 20, 20)
         self.scroll_area.setWidget(self.container)
-        self.placeholder = QLabel("💡 暂无内容 - 请在左侧添加发票")
-        self.placeholder.setStyleSheet("color: #aaa; font-size: 16px; font-weight: bold;")
-        self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 空状态提示（带图标）
+        self.placeholder = QWidget()
+        ph_layout = QVBoxLayout(self.placeholder); ph_layout.setAlignment(Qt.AlignmentFlag.AlignCenter); ph_layout.setSpacing(12)
+        
+        ph_icon = QLabel("📄")
+        ph_icon.setStyleSheet("font-size: 48px; background: transparent;")
+        ph_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ph_layout.addWidget(ph_icon)
+        
+        ph_title = QLabel("暂无预览内容")
+        ph_title.setStyleSheet("color: rgba(255,255,255,0.5); font-size: 16px; font-weight: 600; background: transparent;")
+        ph_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ph_layout.addWidget(ph_title)
+        
+        ph_hint = QLabel("在左侧添加发票文件即可预览打印效果")
+        ph_hint.setStyleSheet("color: rgba(255,255,255,0.3); font-size: 13px; background: transparent;")
+        ph_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ph_layout.addWidget(ph_hint)
+        
         self.scroll_layout.addWidget(self.placeholder)
-        self.control_bar = QFrame(); self.control_bar.setObjectName("PreviewControlBar"); self.control_bar.setFixedHeight(45)
-        cb_layout = QHBoxLayout(self.control_bar); cb_layout.setContentsMargins(15, 5, 15, 5)
+        
+        # 底部控制条
+        self.control_bar = QFrame(); self.control_bar.setObjectName("PreviewControlBar"); self.control_bar.setFixedHeight(42)
+        cb_layout = QHBoxLayout(self.control_bar); cb_layout.setContentsMargins(15, 4, 15, 4)
         self.btn_prev = QPushButton(); self.btn_prev.setIcon(Icons.get("prev")); self.btn_prev.setObjectName("IconBtn"); self.btn_prev.setToolTip("上一页"); self.btn_prev.clicked.connect(self.scroll_prev)
-        self.lbl_page = QLabel("0 张"); self.lbl_page.setObjectName("PageLabel")
+        self.lbl_page = QLabel("0 页"); self.lbl_page.setObjectName("PageLabel")
         self.btn_next = QPushButton(); self.btn_next.setIcon(Icons.get("next")); self.btn_next.setObjectName("IconBtn"); self.btn_next.setToolTip("下一页"); self.btn_next.clicked.connect(self.scroll_next)
         cb_layout.addWidget(self.btn_prev); cb_layout.addWidget(self.lbl_page); cb_layout.addWidget(self.btn_next)
         cb_layout.addStretch()
@@ -78,7 +99,19 @@ class AdvancedPreviewArea(QWidget):
         while self.scroll_layout.count():
             item = self.scroll_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
-        if not self.raw_page_images: self.scroll_layout.addWidget(self.placeholder); return
+        if not self.raw_page_images:
+            # 重新创建 placeholder
+            self.placeholder = QWidget()
+            ph_layout = QVBoxLayout(self.placeholder); ph_layout.setAlignment(Qt.AlignmentFlag.AlignCenter); ph_layout.setSpacing(12)
+            ph_icon = QLabel("📄"); ph_icon.setStyleSheet("font-size: 48px; background: transparent;"); ph_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ph_layout.addWidget(ph_icon)
+            ph_title = QLabel("暂无预览内容"); ph_title.setStyleSheet("color: rgba(255,255,255,0.5); font-size: 16px; font-weight: 600; background: transparent;"); ph_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ph_layout.addWidget(ph_title)
+            ph_hint = QLabel("在左侧添加发票文件即可预览打印效果"); ph_hint.setStyleSheet("color: rgba(255,255,255,0.3); font-size: 13px; background: transparent;"); ph_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ph_layout.addWidget(ph_hint)
+            self.scroll_layout.addWidget(self.placeholder)
+            return
+            
         for i, img in enumerate(self.raw_page_images):
             page_lbl = QLabel(); pix = QPixmap.fromImage(img)
             view_width = self.scroll_area.viewport().width() - 60
@@ -86,11 +119,11 @@ class AdvancedPreviewArea(QWidget):
             # 始终使用高质量渲染，避免滚动时模糊
             scaled_pix = pix.scaledToWidth(view_width, Qt.TransformationMode.SmoothTransformation)
             page_lbl.setPixmap(scaled_pix)
-            shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(25); shadow.setColor(QColor(0,0,0,120)); shadow.setOffset(0, 8)
+            shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(30); shadow.setColor(QColor(0,0,0,100)); shadow.setOffset(0, 6)
             page_lbl.setGraphicsEffect(shadow)
-            page_container = QWidget(); pc_layout = QVBoxLayout(page_container); pc_layout.setContentsMargins(0,0,0,0); pc_layout.setSpacing(5)
+            page_container = QWidget(); pc_layout = QVBoxLayout(page_container); pc_layout.setContentsMargins(0,0,0,0); pc_layout.setSpacing(6)
             pc_layout.addWidget(page_lbl, 0, Qt.AlignmentFlag.AlignCenter)
-            num_lbl = QLabel(f"- {i+1} -"); num_lbl.setStyleSheet("color:#888; font-size:11px;"); num_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            num_lbl = QLabel(f"第 {i+1} 页"); num_lbl.setStyleSheet("color: rgba(255,255,255,0.4); font-size: 11px; font-weight: 500;"); num_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             pc_layout.addWidget(num_lbl)
             self.scroll_layout.addWidget(page_container)
 
@@ -138,5 +171,5 @@ class SingleDocViewer(HandScrollArea):
         # 始终使用高质量渲染
         scaled_pix = self.current_pixmap.scaled(target_w, target_h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         self.label.setPixmap(scaled_pix)
-        shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(30); shadow.setColor(QColor(0,0,0,180)); shadow.setOffset(0, 10)
+        shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(30); shadow.setColor(QColor(0,0,0,120)); shadow.setOffset(0, 8)
         self.label.setGraphicsEffect(shadow)

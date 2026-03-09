@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QStackedWidget, QComboBox, QCheckBox, QRadioButton,
                            QButtonGroup, QToolButton, QFileDialog, QMessageBox,
                            QInputDialog, QSpinBox, QApplication, QAbstractItemView,
-                           QMenu)
+                           QMenu, QFrame)
 from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QIcon, QImage, QAction, QTransform
 from PyQt6.QtPrintSupport import QPrinter, QPrinterInfo, QPrintDialog
@@ -32,7 +32,7 @@ from src.utils.config import UI_CONFIG
 from src.ui.dialogs import ProgressDialog, AboutDialog
 from src.ui.settings_dialog import SettingsDlg
 from src.ui.statistics_dialog import StatisticsDialog
-from src.ui.widgets import Card, DragArea, InvoiceItemWidget
+from src.ui.widgets import Card, GlassCard, DragArea, InvoiceItemWidget
 from src.ui.preview import AdvancedPreviewArea, SingleDocViewer
 
 class MainWindow(QMainWindow):
@@ -78,100 +78,52 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         main = QWidget(); self.setCentralWidget(main)
-        layout = QHBoxLayout(main); layout.setContentsMargins(15,15,15,15); layout.setSpacing(15)
+        layout = QHBoxLayout(main); layout.setContentsMargins(12, 12, 12, 12); layout.setSpacing(12)
 
-        # LEFT
-        left = QWidget(); left.setFixedWidth(280); lv = QVBoxLayout(left); lv.setContentsMargins(0,0,0,0); lv.setSpacing(12)
+        # ── 左侧面板 ──
+        left = QWidget(); left.setFixedWidth(290); lv = QVBoxLayout(left); lv.setContentsMargins(0,0,0,0); lv.setSpacing(10)
         
         # 拖放区域
         self.drag = DragArea(); self.drag.dropped.connect(self.add_files)
         lv.addWidget(self.drag)
         
-        # 发票清单标题
-        list_title = QLabel("📋 发票清单 (双击修正金额)")
-        list_title.setStyleSheet("color: #64748B; font-size: 12px; font-weight: 600; margin-top: 8px;")
-        lv.addWidget(list_title)
+        # 发票清单标题行
+        list_header = QHBoxLayout(); list_header.setContentsMargins(2, 4, 2, 0)
+        list_title = QLabel("发票清单"); list_title.setObjectName("SectionTitle")
+        self.list_count_badge = QLabel("0"); self.list_count_badge.setFixedSize(24, 18)
+        self.list_count_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.list_count_badge.setStyleSheet("background: #E2E8F0; color: #64748B; border-radius: 9px; font-size: 11px; font-weight: 600;")
+        list_hint = QLabel("双击修正金额"); list_hint.setStyleSheet("color: #94A3B8; font-size: 11px;")
+        
+        self.btn_del = QPushButton("清空"); self.btn_del.setFixedHeight(24)
+        self.btn_del.setIcon(Icons.get("trash", "#94A3B8")); self.btn_del.setIconSize(QSize(12, 12))
+        self.btn_del.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: none; border-radius: 4px;
+                color: #94A3B8; font-size: 11px; padding: 2px 6px;
+            }
+            QPushButton:hover {
+                background: #FEE2E2; color: #DC2626;
+            }
+        """)
+        self.btn_del.clicked.connect(self.clear)
+        
+        list_header.addWidget(list_title); list_header.addWidget(self.list_count_badge)
+        list_header.addStretch(); list_header.addWidget(list_hint); list_header.addWidget(self.btn_del)
+        lv.addLayout(list_header)
         
         self.list = QListWidget(); self.list.setIconSize(QSize(40,50)); self.list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu); self.list.customContextMenuRequested.connect(self.ctx_menu)
         self.list.itemDoubleClicked.connect(self.edit_item); self.list.itemClicked.connect(self.show_single_doc)
         
-        tb = QHBoxLayout(); tb.setSpacing(10)
-        self.btn_set = QPushButton("设置")
-        self.btn_set.setMinimumHeight(44)
-        # 平台自适应按钮样式
-        if UI_CONFIG.get("use_gradients", True):
-            btn_bg = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 #2563EB);"
-            btn_hover = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2563EB, stop:1 #1D4ED8);"
-        else:
-            btn_bg = "background: #2563EB;"
-            btn_hover = "background: #1D4ED8;"
-        self.btn_set.setStyleSheet(f"""
-            QPushButton {{
-                {btn_bg}
-                border: none;
-                color: white;
-                font-weight: 600;
-                font-size: 14px;
-                border-radius: 8px;
-                padding: 10px 20px;
-            }}
-            QPushButton:hover {{
-                {btn_hover}
-            }}
-        """)
-        self.btn_set.clicked.connect(lambda: SettingsDlg(self).exec())
+        lv.addWidget(self.list)
         
-        self.btn_del = QPushButton("清空")
-        self.btn_del.setMinimumHeight(44)
-        if UI_CONFIG.get("use_gradients", True):
-            del_bg = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60A5FA, stop:1 #3B82F6);"
-            del_hover = "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 #2563EB);"
-        else:
-            del_bg = "background: #3B82F6;"
-            del_hover = "background: #2563EB;"
-        self.btn_del.setStyleSheet(f"""
-            QPushButton {{
-                {del_bg}
-                border: none;
-                color: white;
-                font-weight: 600;
-                font-size: 14px;
-                border-radius: 8px;
-                padding: 10px 20px;
-            }}
-            QPushButton:hover {{
-                {del_hover}
-            }}
-        """)
-        self.btn_del.clicked.connect(self.clear)
-        
-        # 统计按钮
-        self.btn_stats = QPushButton("📊 统计")
-        self.btn_stats.setMinimumHeight(44)
-        self.btn_stats.setStyleSheet(f"""
-            QPushButton {{
-                background: #10B981;
-                border: none;
-                color: white;
-                font-weight: 600;
-                font-size: 14px;
-                border-radius: 8px;
-                padding: 10px 20px;
-            }}
-            QPushButton:hover {{
-                background: #059669;
-            }}
-        """)
-        self.btn_stats.clicked.connect(lambda: StatisticsDialog(self, self.data).exec())
-        
-        tb.addWidget(self.btn_set); tb.addWidget(self.btn_stats); tb.addStretch(); tb.addWidget(self.btn_del)
-        
-        lv.addWidget(self.list); lv.addLayout(tb)
-        footer_lbl = QLabel(APP_AUTHOR_CN, alignment=Qt.AlignmentFlag.AlignCenter); footer_lbl.setStyleSheet("color:#999; font-size:11px; margin-top: 10px;")
+        # 底部版权
+        footer_lbl = QLabel(APP_AUTHOR_CN, alignment=Qt.AlignmentFlag.AlignCenter)
+        footer_lbl.setStyleSheet("color: #CBD5E1; font-size: 11px; padding: 4px 0;")
         lv.addWidget(footer_lbl)
 
-        # MIDDLE
+        # ── 中间预览区 ──
         mid = QWidget(); mv = QVBoxLayout(mid); mv.setContentsMargins(0,0,0,0); mv.setSpacing(0)
         self.stack = QStackedWidget()
         self.word_preview = AdvancedPreviewArea() 
@@ -179,68 +131,123 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.word_preview); self.stack.addWidget(self.single_viewer)
         mv.addWidget(self.stack)
 
-        # RIGHT
-        self.right_panel = QWidget(); self.right_panel.setFixedWidth(340)
-        rv = QVBoxLayout(self.right_panel); rv.setContentsMargins(0,0,0,0)
+        # ── 右侧面板 ──
+        self.right_panel = QWidget(); self.right_panel.setFixedWidth(330)
+        rv = QVBoxLayout(self.right_panel); rv.setContentsMargins(0,0,0,0); rv.setSpacing(10)
+        
+        # 打印设置卡片
         self.settings_card = Card() 
         self.settings_layout = QVBoxLayout(self.settings_card)
-        self.settings_layout.setSpacing(15); self.settings_layout.setContentsMargins(20,20,20,20)
+        self.settings_layout.setSpacing(14); self.settings_layout.setContentsMargins(20,18,20,18)
         
-        # 打印设置标题
-        print_title = QLabel("🖨️ 打印设置")
-        print_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #1E293B; margin-bottom: 5px;")
-        self.settings_layout.addWidget(print_title)
+        # 打印设置区块标题
+        print_section_title = QLabel("打印设置"); print_section_title.setObjectName("SectionTitle")
+        self.settings_layout.addWidget(print_section_title)
         
         r_pr = QHBoxLayout(); self.cb_pr = QComboBox(); self.cb_pr.addItem("🖥️ 默认打印机/PDF")
         if platform.system() in ["Windows", "Linux"]: 
             for p in QPrinterInfo.availablePrinterNames(): self.cb_pr.addItem(f"🖨️ {p}")
         self.cb_pr.currentIndexChanged.connect(self.on_printer_changed)
         
-        self.btn_prop = QPushButton(); self.btn_prop.setObjectName("PropBtn"); self.btn_prop.setFixedSize(32, 32)
-        self.btn_prop.setIcon(Icons.get("settings", "#64748B")); self.btn_prop.setIconSize(QSize(18, 18))
+        self.btn_prop = QPushButton(); self.btn_prop.setObjectName("PropBtn"); self.btn_prop.setFixedSize(34, 34)
+        self.btn_prop.setIcon(Icons.get("settings", "#94A3B8")); self.btn_prop.setIconSize(QSize(16, 16))
         self.btn_prop.setToolTip("打印机属性")
         self.btn_prop.clicked.connect(self.open_printer_props)
         self.btn_prop.setEnabled(False)
         r_pr.addWidget(self.cb_pr, 1); r_pr.addWidget(self.btn_prop); self.settings_layout.addLayout(r_pr)
 
-        r_cp = QHBoxLayout(); self.sp_cpy = QSpinBox(); self.sp_cpy.setRange(1,99); self.sp_cpy.setSuffix(" 份")
+        r_cp = QHBoxLayout(); r_cp.setSpacing(10)
+        self.sp_cpy = QSpinBox(); self.sp_cpy.setRange(1,99); self.sp_cpy.setSuffix(" 份")
         self.cb_pap = QComboBox(); self.cb_pap.addItems(["A4", "A5", "B5"]); self.cb_pap.currentTextChanged.connect(self.show_layout_preview)
-        r_cp.addWidget(QLabel("份数:")); r_cp.addWidget(self.sp_cpy); r_cp.addWidget(QLabel("纸张:")); r_cp.addWidget(self.cb_pap); self.settings_layout.addLayout(r_cp)
+        lbl_copies = QLabel("份数"); lbl_copies.setStyleSheet("color: #64748B; font-size: 12px;")
+        lbl_paper = QLabel("纸张"); lbl_paper.setStyleSheet("color: #64748B; font-size: 12px;")
+        r_cp.addWidget(lbl_copies); r_cp.addWidget(self.sp_cpy); r_cp.addSpacing(5)
+        r_cp.addWidget(lbl_paper); r_cp.addWidget(self.cb_pap); self.settings_layout.addLayout(r_cp)
         
-        self.settings_layout.addWidget(QLabel("排版模式:"))
-        rm = QHBoxLayout(); 
+        lbl_layout_mode = QLabel("排版模式"); lbl_layout_mode.setStyleSheet("color: #64748B; font-size: 12px; margin-top: 2px;")
+        self.settings_layout.addWidget(lbl_layout_mode)
+        rm = QHBoxLayout(); rm.setSpacing(8)
         self.b1 = QToolButton(); self.b1.setObjectName("LayoutCard"); self.b1.setFixedSize(85, 85); self.b1.setIconSize(QSize(72,72))
         self.b2 = QToolButton(); self.b2.setObjectName("LayoutCard"); self.b2.setFixedSize(85, 85); self.b2.setIconSize(QSize(72,72))
         self.b4 = QToolButton(); self.b4.setObjectName("LayoutCard"); self.b4.setFixedSize(85, 85); self.b4.setIconSize(QSize(72,72))
         self.b1.setCheckable(True); self.b2.setCheckable(True); self.b4.setCheckable(True)
         grp=QButtonGroup(self); grp.addButton(self.b1); grp.addButton(self.b2); grp.addButton(self.b4); self.b1.setChecked(True)
         grp.buttonClicked.connect(self.show_layout_preview)
-        rm.addWidget(self.b1); rm.addWidget(self.b2); rm.addWidget(self.b4); self.settings_layout.addLayout(rm)
+        rm.addWidget(self.b1); rm.addWidget(self.b2); rm.addWidget(self.b4); rm.addStretch()
+        self.settings_layout.addLayout(rm)
 
         r_dir = QHBoxLayout()
         self.rd_p = QRadioButton("纵向"); self.rd_l = QRadioButton("横向"); self.rd_l.setChecked(True)
         self.rd_p.toggled.connect(self.update_layout_icons); self.rd_l.toggled.connect(self.update_layout_icons)
-        r_dir.addWidget(QLabel("方向:")); r_dir.addWidget(self.rd_p); r_dir.addWidget(self.rd_l); r_dir.addStretch()
+        lbl_orient = QLabel("方向"); lbl_orient.setStyleSheet("color: #64748B; font-size: 12px;")
+        r_dir.addWidget(lbl_orient); r_dir.addWidget(self.rd_p); r_dir.addWidget(self.rd_l); r_dir.addStretch()
         self.settings_layout.addLayout(r_dir)
         
         r_opt = QHBoxLayout()
-        self.chk_cut = QCheckBox("显示裁剪辅助线"); self.chk_cut.setChecked(True); self.chk_cut.stateChanged.connect(self.show_layout_preview)
-        self.chk_rotate = QCheckBox("强力打印纠偏"); self.chk_rotate.setToolTip("强制旋转90度打印，解决部分打印机方向错误问题")
-        r_opt.addWidget(self.chk_cut); r_opt.addSpacing(20); r_opt.addWidget(self.chk_rotate); r_opt.addStretch()
+        self.chk_cut = QCheckBox("裁剪辅助线"); self.chk_cut.setChecked(True); self.chk_cut.stateChanged.connect(self.show_layout_preview)
+        self.chk_rotate = QCheckBox("强力纠偏"); self.chk_rotate.setToolTip("强制旋转90度打印，解决部分打印机方向错误问题")
+        r_opt.addWidget(self.chk_cut); r_opt.addSpacing(10); r_opt.addWidget(self.chk_rotate); r_opt.addStretch()
         self.settings_layout.addLayout(r_opt)
         
         rv.addWidget(self.settings_card)
 
-        c3 = Card(); l3 = QVBoxLayout(c3); l3.setSpacing(10); l3.setContentsMargins(20,20,20,20)
-        self.lbl_inf = QLabel("0 张发票"); self.lbl_tot = QLabel("¥ 0.00", styleSheet="font-size:22px; font-weight:bold; color:#007AFF")
-        l3.addWidget(self.lbl_inf); l3.addWidget(self.lbl_tot)
-        self.btn_xls = QPushButton(" 导出 Excel"); self.btn_xls.setIcon(Icons.get("excel")); self.btn_xls.clicked.connect(self.xls); l3.addWidget(self.btn_xls); rv.addWidget(c3)
+        # ── 统计卡片 ──
+        stats_card = Card()
+        stats_layout = QVBoxLayout(stats_card); stats_layout.setSpacing(10); stats_layout.setContentsMargins(20, 16, 20, 16)
+        
+        stats_title = QLabel("汇总"); stats_title.setObjectName("SectionTitle")
+        stats_layout.addWidget(stats_title)
+        
+        # 统计数据网格
+        stats_grid = QHBoxLayout(); stats_grid.setSpacing(0)
+        
+        # 发票数量
+        count_col = QVBoxLayout(); count_col.setSpacing(2)
+        self.lbl_inf = QLabel("0"); self.lbl_inf.setObjectName("StatsValue"); self.lbl_inf.setStyleSheet("font-size: 24px; font-weight: 700; color: #3B82F6;")
+        lbl_count_label = QLabel("张发票"); lbl_count_label.setObjectName("StatsLabel")
+        count_col.addWidget(self.lbl_inf); count_col.addWidget(lbl_count_label)
+        stats_grid.addLayout(count_col)
+        
+        # 分隔线
+        divider = QFrame(); divider.setFixedWidth(1); divider.setStyleSheet("background: #E2E8F0; margin: 4px 16px;")
+        stats_grid.addWidget(divider)
+        
+        # 总金额
+        amount_col = QVBoxLayout(); amount_col.setSpacing(2)
+        self.lbl_tot = QLabel("¥0.00"); self.lbl_tot.setObjectName("StatsValue"); self.lbl_tot.setStyleSheet("font-size: 24px; font-weight: 700; color: #10B981;")
+        lbl_amount_label = QLabel("合计金额"); lbl_amount_label.setObjectName("StatsLabel")
+        amount_col.addWidget(self.lbl_tot); amount_col.addWidget(lbl_amount_label)
+        stats_grid.addLayout(amount_col)
+        
+        stats_layout.addLayout(stats_grid)
+        
+        # 导出按钮
+        self.btn_xls = QPushButton(" 导出 Excel"); self.btn_xls.setObjectName("ActionBtn")
+        self.btn_xls.setIcon(Icons.get("excel", "#475569")); self.btn_xls.setFixedHeight(38)
+        self.btn_xls.clicked.connect(self.xls)
+        stats_layout.addWidget(self.btn_xls)
+        rv.addWidget(stats_card)
 
-        self.btn_go = QPushButton(" 开始打印"); self.btn_go.setObjectName("PrimaryBtn"); self.btn_go.setIcon(Icons.get("print", "white")); self.btn_go.setMinimumHeight(50)
+        # ── 打印按钮 ──
+        self.btn_go = QPushButton(" 开始打印"); self.btn_go.setObjectName("PrimaryBtn")
+        self.btn_go.setIcon(Icons.get("print", "white")); self.btn_go.setMinimumHeight(50)
         self.btn_go.clicked.connect(self.run); rv.addWidget(self.btn_go)
         
-        btn_about = QPushButton(" 关于本软件"); btn_about.clicked.connect(lambda: AboutDialog(self).exec())
-        rv.addWidget(btn_about); rv.addStretch()
+        rv.addStretch()
+        
+        # ── 底部功能按钮 ──
+        bottom_btns = QHBoxLayout(); bottom_btns.setSpacing(6)
+        self.btn_set = QPushButton(" 设置"); self.btn_set.setObjectName("ActionBtn"); self.btn_set.setFixedHeight(34)
+        self.btn_set.clicked.connect(lambda: SettingsDlg(self).exec())
+        
+        self.btn_stats = QPushButton(" 统计"); self.btn_stats.setObjectName("ActionBtn"); self.btn_stats.setFixedHeight(34)
+        self.btn_stats.clicked.connect(lambda: StatisticsDialog(self, self.data).exec())
+        
+        btn_about = QPushButton(" 关于"); btn_about.setObjectName("ActionBtn"); btn_about.setFixedHeight(34)
+        btn_about.clicked.connect(lambda: AboutDialog(self).exec())
+        
+        bottom_btns.addWidget(self.btn_set); bottom_btns.addWidget(self.btn_stats); bottom_btns.addWidget(btn_about)
+        rv.addLayout(bottom_btns)
 
         layout.addWidget(left); layout.addWidget(mid, 1); layout.addWidget(self.right_panel)
         self.drag.upd("#555")
@@ -249,10 +256,11 @@ class MainWindow(QMainWindow):
         self.theme_c = ThemeManager.apply(QApplication.instance(), mode)
         self.drag.upd(self.theme_c)
         self.btn_set.setIcon(Icons.get("settings", self.theme_c))
-        self.btn_del.setIcon(Icons.get("trash", "#d73a49")) 
+        self.btn_del.setIcon(Icons.get("trash", "#DC2626")) 
         self.btn_xls.setIcon(Icons.get("excel", self.theme_c))
         self.btn_go.setIcon(Icons.get("print", "white"))
-        self.update_layout_icons() 
+        self.btn_stats.setIcon(Icons.get("monitor", self.theme_c))
+        self.update_layout_icons()
 
     def update_layout_icons(self):
         if not hasattr(self, 'rd_l') or not self.rd_l: return
@@ -592,11 +600,18 @@ class MainWindow(QMainWindow):
             total_a += amount
         
         # 显示格式：已识别数量 + 未识别数量
+        self.lbl_inf.setText(f"{total_n}")
         if unrecognized_n > 0:
-            self.lbl_inf.setText(f"{total_n} 张发票，{unrecognized_n} 张未识别")
-        else:
-            self.lbl_inf.setText(f"{total_n} 张发票")
-        self.lbl_tot.setText(f"¥ {total_a:,.2f}")
+            self.lbl_inf.setToolTip(f"{total_n} 张发票，{unrecognized_n} 张未识别")
+        self.lbl_tot.setText(f"¥{total_a:,.2f}")
+        
+        # 更新清单徽标
+        if hasattr(self, 'list_count_badge'):
+            self.list_count_badge.setText(str(len(self.data)))
+            if len(self.data) > 0:
+                self.list_count_badge.setStyleSheet("background: #DBEAFE; color: #2563EB; border-radius: 9px; font-size: 11px; font-weight: 600;")
+            else:
+                self.list_count_badge.setStyleSheet("background: #E2E8F0; color: #64748B; border-radius: 9px; font-size: 11px; font-weight: 600;")
     def clear(self): self.list.clear(); self.data=[]; self.calc(); self.trigger_refresh()
     def ctx_menu(self, p): m=QMenu(); a=QAction("删除",self); a.triggered.connect(self.del_sel); m.addAction(a); m.exec(self.list.mapToGlobal(p))
     def del_sel(self):
