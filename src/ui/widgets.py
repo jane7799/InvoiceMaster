@@ -178,6 +178,32 @@ class DragArea(QWidget):
         if fs: self.dropped.emit(fs)
 
 class InvoiceItemWidget(QWidget):
+    # 发票类型颜色映射
+    TYPE_COLORS = {
+        "增值税专用发票": "#DC2626",      # 红色
+        "增值税普通发票": "#2563EB",      # 蓝色
+        "增值税电子普通发票": "#7C3AED",  # 紫色
+        "电子发票": "#7C3AED",            # 紫色
+        "增值税发票": "#2563EB",          # 蓝色
+        "铁路电子客票": "#059669",        # 绿色
+        "财政电子票据": "#D97706",        # 橙色
+        "发票清单": "#6B7280",            # 灰色
+        "非发票凭证": "#9CA3AF",          # 浅灰
+    }
+    
+    # 发票类型简称映射（节省空间）
+    TYPE_SHORT_NAMES = {
+        "增值税专用发票": "专票",
+        "增值税普通发票": "普票",
+        "增值税电子普通发票": "电子普票",
+        "电子发票": "电子票",
+        "增值税发票": "增值税",
+        "铁路电子客票": "火车票",
+        "财政电子票据": "财政票",
+        "发票清单": "清单",
+        "非发票凭证": "非发票",
+    }
+
     def __init__(self, data, parent_item, delete_callback):
         super().__init__()
         self.data = data
@@ -225,11 +251,24 @@ class InvoiceItemWidget(QWidget):
         
         text_layout.addLayout(title_row)
         
-        # 详情行
+        # 详情行（包含类型标签和日期）
+        detail_row = QHBoxLayout()
+        detail_row.setSpacing(4)
+        
+        # 类型标签
+        self.type_badge = QLabel()
+        self.type_badge.setFixedHeight(16)
+        self.type_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.type_badge.hide()
+        detail_row.addWidget(self.type_badge)
+        
         self.lbl_detail = QLabel(f"{data['d']} | ¥{data['a']:.2f}")
         self.lbl_detail.setObjectName("ItemDetail")
         self.lbl_detail.setStyleSheet("font-size: 11px;")
-        text_layout.addWidget(self.lbl_detail)
+        detail_row.addWidget(self.lbl_detail)
+        detail_row.addStretch()
+        
+        text_layout.addLayout(detail_row)
         
         layout.addLayout(text_layout)
         layout.addStretch()
@@ -268,7 +307,38 @@ class InvoiceItemWidget(QWidget):
         else:
             self.amount_label.setStyleSheet("font-size: 13px; font-weight: 600; color: #CBD5E1;")
         
+        # 更新类型标签
+        self._update_type_badge()
         self.update_status_badge()
+    
+    def _update_type_badge(self):
+        """更新发票类型标签"""
+        inv_type = self.data.get("ext", {}).get("invoice_type", "")
+        if inv_type:
+            short_name = self.TYPE_SHORT_NAMES.get(inv_type, inv_type[:4])
+            color = self._get_type_color(inv_type)
+            self.type_badge.setText(short_name)
+            self.type_badge.setStyleSheet(f"""
+                background: {color}20; color: {color}; 
+                border-radius: 3px; font-size: 9px; font-weight: 600;
+                padding: 0px 4px;
+            """)
+            self.type_badge.setFixedWidth(max(32, len(short_name) * 10 + 8))
+            self.type_badge.show()
+            # 同步更新指示条颜色
+            self.type_indicator.setStyleSheet(f"background: {color}; border-radius: 1.5px;")
+        else:
+            self.type_badge.hide()
+    
+    def _get_type_color(self, inv_type):
+        """获取发票类型对应颜色"""
+        if inv_type in self.TYPE_COLORS:
+            return self.TYPE_COLORS[inv_type]
+        # 模糊匹配
+        for key, color in self.TYPE_COLORS.items():
+            if key in inv_type or inv_type in key:
+                return color
+        return "#64748B"  # 默认灰色
     
     def update_status_badge(self):
         """更新状态标识"""
@@ -283,7 +353,8 @@ class InvoiceItemWidget(QWidget):
             """)
             self.status_badge.setToolTip("未识别到金额，请双击修改")
             self.status_badge.show()
-            self.type_indicator.setStyleSheet("background: #F87171; border-radius: 1.5px;")
+            if not self.data.get("ext", {}).get("invoice_type"):
+                self.type_indicator.setStyleSheet("background: #F87171; border-radius: 1.5px;")
             self.setStyleSheet("""
                 QWidget#ItemRow { 
                     background: rgba(254, 226, 226, 0.3); 
@@ -298,7 +369,8 @@ class InvoiceItemWidget(QWidget):
             """)
             self.status_badge.setToolTip("已手动修改金额")
             self.status_badge.show()
-            self.type_indicator.setStyleSheet("background: #10B981; border-radius: 1.5px;")
+            if not self.data.get("ext", {}).get("invoice_type"):
+                self.type_indicator.setStyleSheet("background: #10B981; border-radius: 1.5px;")
             self.setStyleSheet("""
                 QWidget#ItemRow { 
                     background: rgba(209, 250, 229, 0.2); 
@@ -307,7 +379,8 @@ class InvoiceItemWidget(QWidget):
             """)
         else:
             self.status_badge.hide()
-            self.type_indicator.setStyleSheet("background: #3B82F6; border-radius: 1.5px;")
+            if not self.data.get("ext", {}).get("invoice_type"):
+                self.type_indicator.setStyleSheet("background: #3B82F6; border-radius: 1.5px;")
             self.setStyleSheet("")
 
 class DynamicSplashScreen(QWidget):

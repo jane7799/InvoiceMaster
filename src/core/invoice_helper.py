@@ -115,7 +115,7 @@ class InvoiceHelper:
     def thumb(fp):
         try: 
             with fitz.open(fp) as doc:
-                return QPixmap.fromImage(QImage.fromData(doc.load_page(0).get_pixmap(matrix=fitz.Matrix(0.3,0.3)).tobytes("ppm")))
+                return QPixmap.fromImage(QImage.fromData(doc.load_page(0).get_pixmap(matrix=fitz.Matrix(0.3,0.3), annots=True).tobytes("ppm")))
         except: return Icons.get("file", "#ccc").pixmap(100,100)
     
     @staticmethod

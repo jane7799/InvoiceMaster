@@ -316,7 +316,8 @@ class MainWindow(QMainWindow):
             if doc:
                 # 使用平台自适应的渲染分辨率
                 scale = UI_CONFIG.get("preview_render_scale", 4.0)
-                pix = doc[0].get_pixmap(matrix=fitz.Matrix(scale, scale))
+                # 【V5.1】annots=True: 确保发票章等注释层在预览中可见
+                pix = doc[0].get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False, annots=True)
                 img = QImage.fromData(pix.tobytes("ppm"))
                 
                 # [V3.4.0] 单张预览也需要反向旋转修复 (与排版预览逻辑保持一致)
@@ -373,7 +374,7 @@ class MainWindow(QMainWindow):
             for page in self.current_doc: 
                 # 使用平台自适应的渲染分辨率
                 scale = UI_CONFIG.get("preview_render_scale", 4.0)
-                pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale)); img = QImage.fromData(pix.tobytes("ppm"))
+                pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False, annots=True); img = QImage.fromData(pix.tobytes("ppm"))
                 if rotate_preview:
                     transform = QTransform()
                     transform.rotate(-90) 
@@ -495,7 +496,7 @@ class MainWindow(QMainWindow):
                 self._start_async_ocr(files_with_index, ak, sk)
             else:
                 logger.info(f"文件添加完成，共 {len(self.data)} 个发票（无 OCR）")
-                
+                self.sort_by_invoice_type()  # 自动按类型分组排序
         except Exception as e:
             logger.error(f"添加文件全局错误: {str(e)}", exc_info=True)
             QMessageBox.critical(self, "导入失败", f"添加文件时发生错误:\n{str(e)}")
@@ -572,8 +573,59 @@ class MainWindow(QMainWindow):
             self.progress_dialog = None
         
         self.ocr_worker = None
+        self.sort_by_invoice_type()  # 自动按类型分组排序
         self.calc()
         self.show_layout_preview()
+
+    # ── 发票分类排序优先级 ──
+    INVOICE_TYPE_ORDER = {
+        "增值税专用发票": 0,
+        "增值税普通发票": 1,
+        "增值税电子普通发票": 2,
+        "电子发票": 3,
+        "增值税发票": 4,
+        "铁路电子客票": 5,
+        "财政电子票据": 6,
+        "发票清单": 7,
+        "非发票凭证": 8,
+    }
+
+    def _get_type_sort_key(self, d):
+        """获取发票的分类排序键"""
+        inv_type = d.get("ext", {}).get("invoice_type", "")
+        # 精确匹配
+        if inv_type in self.INVOICE_TYPE_ORDER:
+            return self.INVOICE_TYPE_ORDER[inv_type]
+        # 模糊匹配（处理类似 "非发票凭证-入住" 等变体）
+        for key, order in self.INVOICE_TYPE_ORDER.items():
+            if key in inv_type or inv_type in key:
+                return order
+        return 99  # 未分类排最后
+
+    def sort_by_invoice_type(self):
+        """按发票类型分组排序，同类型发票排在一起"""
+        logger = logging.getLogger(__name__)
+        if len(self.data) <= 1:
+            return
+        
+        # 按类型排序，同类型内保持原始导入顺序（stable sort）
+        self.data.sort(key=self._get_type_sort_key)
+        
+        # 刷新列表显示
+        self.list.clear()
+        for d in self.data:
+            item = QListWidgetItem(self.list)
+            item.setSizeHint(QSize(250, 60))
+            widget = InvoiceItemWidget(d, item, self.delete_specific_item)
+            self.list.setItemWidget(item, widget)
+            widget.update_display(d)
+        
+        # 记录排序结果
+        type_counts = {}
+        for d in self.data:
+            t = d.get("ext", {}).get("invoice_type", "未分类") or "未分类"
+            type_counts[t] = type_counts.get(t, 0) + 1
+        logger.info(f"发票已按类型分组排序: {type_counts}")
 
     def calc(self):
         """计算统计信息（仅计算有效发票，排除清单和非发票凭证）"""

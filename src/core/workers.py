@@ -400,7 +400,8 @@ class PrintWorker(QThread):
                     if i > 0:
                         self.printer.newPage()
                     
-                    pix = page.get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=False)
+                    # 【V5.1】annots=True: 确保发票监制章、签章等注释层也被渲染
+                    pix = page.get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=False, annots=True)
                     img = QImage.fromData(pix.tobytes("ppm"))
                     
                     self.printer.setPageOrientation(QPageLayout.Orientation.Portrait)

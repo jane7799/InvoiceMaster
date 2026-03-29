@@ -21,8 +21,8 @@ class PrinterEngine:
                     return False, "无法启动打印任务"
                 for i, page in enumerate(doc):
                     if i > 0: printer.newPage()
-                    # 【V5.0】提高渲染质量: 4.0倍缩放,保持PDF原始高分辨率
-                    pix = page.get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=False)
+                    # 【V5.1】annots=True: 确保发票监制章、签章等注释层也被渲染
+                    pix = page.get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=False, annots=True)
                     img = QImage.fromData(pix.tobytes("ppm"))
                     
                     # 永远纵向
