@@ -45,7 +45,14 @@ class PDFEngine:
                                 # bake() 会将所有注释和控件烘焙进正式的页面内容流中，确保章随版面一起保留
                                 if hasattr(src_doc, 'bake'):
                                     src_doc.bake(annots=True, widgets=True)
-                                pg.show_pdf_page(target_rect, src_doc, 0, keep_proportion=True, rotate=rotate_angle)
+                                    pg.show_pdf_page(target_rect, src_doc, 0, keep_proportion=True, rotate=rotate_angle)
+                                else:
+                                    # [针对 Win7 的低版本 Fallback] 没有 bake() 方法的 PyMuPDF 会丢失印章
+                                    # 降级方案：将被合并的页面预渲染成高分辨率图像(4x + 不透明白底)，再把这层“截屏红章”作为图片嵌进最终排版里
+                                    pix = src_doc[0].get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=False, annots=True)
+                                    img_bytes = pix.tobytes("png")
+                                    # [支持旋转，保证和 show_pdf_page 相同布局效果]
+                                    pg.insert_image(target_rect, stream=img_bytes, keep_proportion=True, rotate=rotate_angle)
                     except Exception as e:
                         logger = logging.getLogger(__name__)
                         logger.error(f"处理文件失败 {os.path.basename(f)}: {str(e)}")
