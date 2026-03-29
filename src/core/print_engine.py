@@ -21,9 +21,9 @@ class PrinterEngine:
                     return False, "无法启动打印任务"
                 for i, page in enumerate(doc):
                     if i > 0: printer.newPage()
-                    # 【V5.1】alpha=True + png: 确保发票监制章等透明图层正确渲染
-                    pix = page.get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=True, annots=True)
-                    img = QImage.fromData(pix.tobytes("png"))
+                    # 【V5.1】alpha=False: 必须使用 False，以提供白色背景供发票章(BlendMode:Darken)正常混合叠加
+                    pix = page.get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=False, annots=True)
+                    img = QImage.fromData(pix.tobytes("ppm"))
                     
                     # 永远纵向
                     printer.setPageOrientation(QPageLayout.Orientation.Portrait)

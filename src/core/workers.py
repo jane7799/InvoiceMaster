@@ -400,9 +400,9 @@ class PrintWorker(QThread):
                     if i > 0:
                         self.printer.newPage()
                     
-                    # 【V5.1】alpha=True + png: 确保发票监制章等透明图层正确渲染
-                    pix = page.get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=True, annots=True)
-                    img = QImage.fromData(pix.tobytes("png"))
+                    # 【V5.1】alpha=False: 必须使用 False，以提供白色背景供发票章(BlendMode:Darken)正常混合叠加
+                    pix = page.get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=False, annots=True)
+                    img = QImage.fromData(pix.tobytes("ppm"))
                     
                     self.printer.setPageOrientation(QPageLayout.Orientation.Portrait)
                     

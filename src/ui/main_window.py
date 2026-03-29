@@ -316,9 +316,9 @@ class MainWindow(QMainWindow):
             if doc:
                 # 使用平台自适应的渲染分辨率
                 scale = UI_CONFIG.get("preview_render_scale", 4.0)
-                # 【V5.1】alpha=True + png: 确保发票章等透明图层在预览中正确渲染
-                pix = doc[0].get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=True, annots=True)
-                img = QImage.fromData(pix.tobytes("png"))
+                # 【V5.1】alpha=False: 必须使用 False，以提供白色背景供发票章正常混合叠加
+                pix = doc[0].get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False, annots=True)
+                img = QImage.fromData(pix.tobytes("ppm"))
                 
                 # [V3.4.0] 单张预览也需要反向旋转修复 (与排版预览逻辑保持一致)
                 if o == "H":
@@ -374,7 +374,7 @@ class MainWindow(QMainWindow):
             for page in self.current_doc: 
                 # 使用平台自适应的渲染分辨率
                 scale = UI_CONFIG.get("preview_render_scale", 4.0)
-                pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=True, annots=True); img = QImage.fromData(pix.tobytes("png"))
+                pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False, annots=True); img = QImage.fromData(pix.tobytes("ppm"))
                 if rotate_preview:
                     transform = QTransform()
                     transform.rotate(-90) 
