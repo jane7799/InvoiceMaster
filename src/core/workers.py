@@ -340,7 +340,15 @@ class PdfWorker(QThread):
                             pg.insert_image(target_rect, filename=f, keep_proportion=True, rotate=rotate_angle)
                         else:
                             with fitz.open(f) as src_doc:
-                                pg.show_pdf_page(target_rect, src_doc, 0, keep_proportion=True, rotate=rotate_angle)
+                                # 【V5.1】关键修复：同步 pdf_engine.py，保留注释红章
+                                if hasattr(src_doc, 'bake'):
+                                    src_doc.bake(annots=True, widgets=True)
+                                    pg.show_pdf_page(target_rect, src_doc, 0, keep_proportion=True, rotate=rotate_angle)
+                                else:
+                                    # PyMuPDF < 1.24 fallback
+                                    pix = src_doc[0].get_pixmap(matrix=fitz.Matrix(4.0, 4.0), alpha=False, annots=True)
+                                    img_bytes = pix.tobytes("png")
+                                    pg.insert_image(target_rect, stream=img_bytes, keep_proportion=True, rotate=rotate_angle)
                     except Exception as e:
                         self.logger.error(f"处理文件失败 {os.path.basename(f)}: {str(e)}")
                 
