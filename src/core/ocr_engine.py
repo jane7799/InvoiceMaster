@@ -23,7 +23,7 @@ class InvoiceHelper:
         try:
             with fitz.open(fp) as doc:
                 return QPixmap.fromImage(
-                    QImage.fromData(doc.load_page(0).get_pixmap(matrix=fitz.Matrix(0.3, 0.3), annots=True).tobytes("ppm"))
+                    QImage.fromData(doc.load_page(0).get_pixmap(matrix=fitz.Matrix(0.3, 0.3), alpha=True, annots=True).tobytes("png"))
                 )
         except Exception:
             return None
