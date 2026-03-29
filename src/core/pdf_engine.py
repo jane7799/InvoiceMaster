@@ -41,6 +41,10 @@ class PDFEngine:
                         else:
                             # PDF文件:使用 show_pdf_page
                             with fitz.open(f) as src_doc:
+                                # 【V5.1】关键修复：show_pdf_page 默认不保留注释层（发票红章）
+                                # bake() 会将所有注释和控件烘焙进正式的页面内容流中，确保章随版面一起保留
+                                if hasattr(src_doc, 'bake'):
+                                    src_doc.bake(annots=True, widgets=True)
                                 pg.show_pdf_page(target_rect, src_doc, 0, keep_proportion=True, rotate=rotate_angle)
                     except Exception as e:
                         logger = logging.getLogger(__name__)
