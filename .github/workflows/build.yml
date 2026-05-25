@@ -147,22 +147,46 @@ jobs:
           pip install opencv-python-headless pyzbar
           
       - name: Verify pyzbar
+        env:
+          # 【修复】显式指定动态库路径，让 Python 的 ctypes 能够定位到 Homebrew 安装的 libzbar
+          DYLD_LIBRARY_PATH: /opt/homebrew/lib:${{ env.DYLD_LIBRARY_PATH }}
         run: |
           # 【诊断】验证 pyzbar 可以正常导入
           python -c "from pyzbar.pyzbar import decode; print('pyzbar OK')"
           
       - name: Build Mac App
+        env:
+          # 【修复】确保 PyInstaller 在分析依赖时也能正确加载到 libzbar
+          DYLD_LIBRARY_PATH: /opt/homebrew/lib:${{ env.DYLD_LIBRARY_PATH }}
         run: |
+          # 提取 libzbar.dylib 的实际路径，将其作为二进制文件直接打进 App 包内
+          # 这样可以确保打包出来的 App 即使发给没有装 brew install zbar 的小白用户也能正常打开
+          ZBAR_DYLIB=$(find /opt/homebrew/lib -name "libzbar*.dylib" | head -n 1)
+          if [ -n "$ZBAR_DYLIB" ]; then
+            echo "Found zbar dylib at: $ZBAR_DYLIB"
+            BINARY_ARG="--add-binary $ZBAR_DYLIB:."
+          else
+            echo "WARNING: libzbar dylib not found!"
+            BINARY_ARG=""
+          fi
+
           # Mac 用冒号 :
-          # 【关键】添加 --hidden-import 确保 pyzbar 被正确打包
-          python -m PyInstaller --name "智能发票管理助手_Mac版" --windowed --clean --noconfirm --icon="logo.icns" --add-data "qr1.jpg:." --add-data "qr2.jpg:." --add-data "icon_1x1_l.png:." --add-data "icon_1x1_p.png:." --add-data "icon_1x2_l.png:." --add-data "icon_1x2_p.png:." --add-data "icon_2x2_l.png:." --add-data "icon_2x2_p.png:." --hidden-import=cv2 --hidden-import=pyzbar --hidden-import=pyzbar.pyzbar InvoiceMaster.py
+          # 【关键】添加 --hidden-import 和 $BINARY_ARG 确保 pyzbar 及其底层依赖被正确打包
+          python -m PyInstaller --name "智能发票管理助手_Mac版" \
+            --windowed --clean --noconfirm --icon="logo.icns" \
+            --add-data "qr1.jpg:." --add-data "qr2.jpg:." \
+            --add-data "icon_1x1_l.png:." --add-data "icon_1x1_p.png:." \
+            --add-data "icon_1x2_l.png:." --add-data "icon_1x2_p.png:." \
+            --add-data "icon_2x2_l.png:." --add-data "icon_2x2_p.png:." \
+            --hidden-import=cv2 --hidden-import=pyzbar --hidden-import=pyzbar.pyzbar \
+            $BINARY_ARG \
+            InvoiceMaster.py
           
       - name: Upload Mac Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SmartInvoice_For_Mac
           path: dist/智能发票管理助手_Mac版*
-
   # ==================================================
   # 任务 4: Linux/UOS 版本（统信UOS兼容）
   # ==================================================
