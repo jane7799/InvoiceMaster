@@ -25,8 +25,8 @@ jobs:
           pip install pyinstaller
           # 【关键】锁定 PyMuPDF 版本以防报错
           pip install pdfplumber pandas requests openpyxl pymupdf==1.23.26
-          # 【关键】锁定 PyQt6 版本以支持 Win7
-          pip install PyQt6==6.1.0 PyQt6-Qt6==6.1.0 PyQt6-sip==13.1.0
+          # 【关键】使用 PyQt5 完美支持 Windows 7
+          pip install PyQt5 PyQt5-sip
           # 【修复 cv2 报错】安装 OpenCV 和 pyzbar
           pip install opencv-python-headless pyzbar
           pip uninstall -y pathlib || true

@@ -47,7 +47,7 @@ def show_native_error(title: str, message: str, *, icon=MB_ICONWARNING):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _check_windows_version() -> list[str]:
-    """检查 Windows 版本，Win7 无法运行 PyQt6。"""
+    """检查 Windows 版本，如果使用原生 PyQt6 在 Win7 下运行时给予提示。"""
     issues: list[str] = []
     if platform.system() != 'Windows':
         return issues
@@ -56,13 +56,20 @@ def _check_windows_version() -> list[str]:
     logger.info(f"检测到 Windows 版本: {win_ver}")
 
     if win_ver == '7':
-        msg = (
-            "当前系统为 Windows 7，PyQt6（Qt6）不支持 Windows 7。\n\n"
-            "建议升级到 Windows 10 或更高版本以获得完整功能支持。\n"
-            "程序将尝试继续运行，但界面可能无法正常显示。"
-        )
-        issues.append("Windows 7 不受 PyQt6 支持，建议升级至 Windows 10+")
-        show_native_error("Windows 版本警告", msg, icon=MB_ICONERROR)
+        # 检查是否正在使用原生 PyQt6（还是 PyQt5 兼容层）
+        is_using_native_pyqt6 = True
+        core_mod = sys.modules.get('PyQt6.QtCore')
+        if core_mod and core_mod.__class__.__name__ == 'PyQt6QtCoreModule':
+            is_using_native_pyqt6 = False
+
+        if is_using_native_pyqt6:
+            msg = (
+                "当前系统为 Windows 7，当前运行的版本基于 PyQt6（Qt6），不支持 Windows 7。\n\n"
+                "如果您遇到界面无法显示或报错，请运行「Win7兼容版」。\n"
+                "程序将尝试继续运行。"
+            )
+            issues.append("Windows 7 运行原生 PyQt6，建议使用 Win7 兼容版")
+            show_native_error("Windows 版本提示", msg, icon=MB_ICONWARNING)
 
     return issues
 

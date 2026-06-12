@@ -6,6 +6,12 @@ import platform
 # 确保 src 目录在 Python 路径中（在 startup_check 之前）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# 启用 PyQt5/PyQt6 兼容层（必须在导入任何 Qt 组件之前）
+try:
+    import src.utils.qt_compat
+except Exception:
+    pass
+
 # 启动前环境检查（在导入 Qt 之前执行）
 try:
     from src.utils.startup_check import check_environment, show_native_error

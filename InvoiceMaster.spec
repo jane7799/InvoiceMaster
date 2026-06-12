@@ -77,6 +77,35 @@ try:
 except ImportError:
     print("[警告] OpenCV (cv2) 未安装")
 
+# 检测是使用 PyQt6 还是 PyQt5
+qt_impl = 'PyQt6'
+try:
+    import PyQt6
+except ImportError:
+    try:
+        import PyQt5
+        qt_impl = 'PyQt5'
+    except ImportError:
+        pass
+
+print(f"[*] PyInstaller spec: 检测到 Qt 实现为 {qt_impl}")
+
+# 将动态检测到的 Qt 隐藏导入加入列表
+qt_hidden_imports = [
+    f'{qt_impl}.QtCore',
+    f'{qt_impl}.QtGui',
+    f'{qt_impl}.QtWidgets',
+    f'{qt_impl}.QtPrintSupport',
+]
+if qt_impl == 'PyQt6':
+    qt_hidden_imports.append('PyQt6.sip')
+else:
+    try:
+        import PyQt5.sip
+        qt_hidden_imports.append('PyQt5.sip')
+    except ImportError:
+        qt_hidden_imports.append('sip')
+
 a = Analysis(
     ['InvoiceMaster.py'],
     pathex=[],
@@ -94,12 +123,7 @@ a = Analysis(
         ('icon_2x2_l.png', '.'),
         ('icon_2x2_p.png', '.'),
     ],
-    hiddenimports=[
-        'PyQt6.QtCore',
-        'PyQt6.QtGui',
-        'PyQt6.QtWidgets',
-        'PyQt6.QtPrintSupport',
-        'PyQt6.sip',
+    hiddenimports=qt_hidden_imports + [
         'pandas',
         'openpyxl',
         'fitz',
@@ -113,7 +137,7 @@ a = Analysis(
         'src.core.database', 'src.core.workers', 'src.core.pdf_engine', 'src.core.print_engine',
         'src.core.invoice_helper', 'src.core.license_manager',
         'src.utils.log_manager', 'src.utils.icons', 'src.utils.config', 'src.utils.utils',
-        'src.utils.startup_check',
+        'src.utils.startup_check', 'src.utils.qt_compat',
         'src.themes.theme_manager',
         'src.ui.main_window', 'src.ui.dialogs', 'src.ui.settings_dialog',
         'src.ui.statistics_dialog', 'src.ui.widgets', 'src.ui.preview',

@@ -19,7 +19,14 @@ if hasattr(sys, '_MEIPASS'):
     os.environ['PATH'] = base + os.pathsep + existing_path
 
     # ── 2. 设置 Qt 插件路径 ────────────────────────────────────────────
+    # 兼容 PyQt6 和 PyQt5
     qt_plugins = os.path.join(base, 'PyQt6', 'Qt6', 'plugins')
+    if not os.path.exists(qt_plugins):
+        # 探测 PyQt5 插件路径
+        qt_plugins = os.path.join(base, 'PyQt5', 'Qt5', 'plugins')
+        if not os.path.exists(qt_plugins):
+            qt_plugins = os.path.join(base, 'PyQt5', 'plugins')
+
     if os.path.exists(qt_plugins):
         os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = os.path.join(
             qt_plugins, 'platforms'
@@ -34,7 +41,11 @@ if hasattr(sys, '_MEIPASS'):
             pass
 
         # 添加可能包含 DLL 的子目录
-        dll_subdirs = ['pyzbar', 'cv2', 'PyQt6', 'PyQt6/Qt6/bin']
+        dll_subdirs = [
+            'pyzbar', 'cv2', 
+            'PyQt6', 'PyQt6/Qt6/bin',
+            'PyQt5', 'PyQt5/Qt5/bin', 'PyQt5/Qt/bin'
+        ]
         for subdir in dll_subdirs:
             d = os.path.join(base, subdir)
             if os.path.isdir(d):
@@ -44,7 +55,8 @@ if hasattr(sys, '_MEIPASS'):
                     pass
 
     # ── 4. 将所有子目录也追加到 PATH（兜底方案）────────────────────────
-    for subdir in ['pyzbar', 'cv2', 'PyQt6', 'PyQt6/Qt6/bin']:
+    dll_paths = ['pyzbar', 'cv2', 'PyQt6', 'PyQt6/Qt6/bin', 'PyQt5', 'PyQt5/Qt5/bin', 'PyQt5/Qt/bin']
+    for subdir in dll_paths:
         d = os.path.join(base, subdir)
         if os.path.isdir(d) and d not in os.environ['PATH']:
             os.environ['PATH'] = d + os.pathsep + os.environ['PATH']

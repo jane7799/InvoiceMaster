@@ -1,10 +1,16 @@
-#!/usr/bin/env python3
-"""
-获取当前系统的真实机器码
-"""
+import sys
+import os
 import hashlib
 import uuid
 import platform
+
+# 确保 src 目录在 Python 路径中
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import src.utils.qt_compat
+except Exception:
+    pass
+
 from PyQt6.QtCore import QSettings
 
 def get_hardware_info():
