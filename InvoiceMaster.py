@@ -9,8 +9,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # 启用 PyQt5/PyQt6 兼容层（必须在导入任何 Qt 组件之前）
 try:
     import src.utils.qt_compat
-except Exception:
-    pass
+except Exception as e:
+    import traceback
+    # 如果在 Windows 平台上，弹窗显示详细错误
+    if platform.system() == 'Windows':
+        try:
+            import ctypes
+            error_details = f"兼容层加载失败，请联系开发人员。\n\n错误详情:\n{traceback.format_exc()}"
+            ctypes.windll.user32.MessageBoxW(0, error_details, "兼容层错误", 0x00000010)
+        except Exception:
+            pass
+    # 打印到标准错误输出
+    traceback.print_exc()
 
 # 启动前环境检查（在导入 Qt 之前执行）
 try:
