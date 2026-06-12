@@ -137,6 +137,20 @@ jobs:
           # 【关键】安装 zbar 系统库，pyzbar 在 macOS 上需要它
           brew install zbar
           
+      - name: Symlink zbar for ctypes discovery
+        run: |
+          # 创建 macOS ctypes 默认搜索目录
+          mkdir -p ~/lib
+          # 动态搜索并建立软链接
+          ZBAR_PATH=$(find /opt/homebrew/lib /usr/local/lib -name "libzbar.dylib" 2>/dev/null | head -n 1)
+          if [ -n "$ZBAR_PATH" ]; then
+            ln -sf "$ZBAR_PATH" ~/lib/libzbar.dylib
+            echo "Successfully symlinked $ZBAR_PATH to ~/lib/libzbar.dylib"
+          else
+            echo "ERROR: libzbar.dylib not found!"
+            exit 1
+          fi
+          
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -147,21 +161,15 @@ jobs:
           pip install opencv-python-headless pyzbar
           
       - name: Verify pyzbar
-        env:
-          # 【修复】显式指定动态库路径，让 Python 的 ctypes 能够定位到 Homebrew 安装的 libzbar
-          DYLD_LIBRARY_PATH: /opt/homebrew/lib:${{ env.DYLD_LIBRARY_PATH }}
         run: |
           # 【诊断】验证 pyzbar 可以正常导入
           python -c "from pyzbar.pyzbar import decode; print('pyzbar OK')"
           
       - name: Build Mac App
-        env:
-          # 【修复】确保 PyInstaller 在分析依赖时也能正确加载到 libzbar
-          DYLD_LIBRARY_PATH: /opt/homebrew/lib:${{ env.DYLD_LIBRARY_PATH }}
         run: |
           # 提取 libzbar.dylib 的实际路径，将其作为二进制文件直接打进 App 包内
-          # 这样可以确保打包出来的 App 即使发给没有装 brew install zbar 的小白用户也能正常打开
-          ZBAR_DYLIB=$(find /opt/homebrew/lib -name "libzbar*.dylib" | head -n 1)
+          # 这样可以确保打包出来的 App 即使发给没有装 brew install zbar 的用户也能正常打开
+          ZBAR_DYLIB=$(find /opt/homebrew/lib /usr/local/lib ~/lib -name "libzbar*.dylib" 2>/dev/null | head -n 1)
           if [ -n "$ZBAR_DYLIB" ]; then
             echo "Found zbar dylib at: $ZBAR_DYLIB"
             BINARY_ARG="--add-binary $ZBAR_DYLIB:."
