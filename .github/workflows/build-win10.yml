@@ -1,0 +1,60 @@
+name: Build for Windows 10/11
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-win10-modern:
+    name: Build for Windows 10/11
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+          # 强制覆盖安装稳定的 PyMuPDF
+          pip install pymupdf==1.23.26
+          # 【关键】确保安装 opencv-python-headless 和 pyzbar
+          pip install opencv-python-headless pyzbar
+          
+      - name: Verify pyzbar DLLs
+        run: |
+          # 【诊断】检查 pyzbar DLL 是否存在
+          python -c "import pyzbar; import os; pyzbar_dir = os.path.dirname(pyzbar.__file__); dlls = [f for f in os.listdir(pyzbar_dir) if f.endswith('.dll')]; print('pyzbar directory:', pyzbar_dir); print('Found DLLs:', dlls)"
+        shell: pwsh
+          
+      - name: Build Win10 EXE
+        run: |
+          # 获取 pyzbar 路径并收集 DLL
+          $pyzbarPath = python -c "import pyzbar; import os; print(os.path.dirname(pyzbar.__file__))"
+          Write-Host "pyzbar path: $pyzbarPath"
+          
+          $dllArgs = ""
+          Get-ChildItem -Path $pyzbarPath -Filter "*.dll" | ForEach-Object {
+            Write-Host "Adding DLL: $($_.Name)"
+            $dllArgs += " --add-binary `"$($_.FullName);pyzbar`""
+          }
+          
+          # 如果没有找到 DLL，输出警告但继续构建
+          if ($dllArgs -eq "") {
+            Write-Host "WARNING: No pyzbar DLLs found! QR code scanning may not work."
+          }
+          
+          # Windows 用分号 ;
+          # 【关键】添加 --hidden-import 和 --add-binary 以确保 pyzbar 正常工作
+          $cmd = "python -m PyInstaller --name `"智能发票管理助手_Win10现代版`" --windowed --onefile --clean --noconfirm --icon=`"logo.ico`" --add-data `"qr1.jpg;.`" --add-data `"qr2.jpg;.`" --add-data `"icon_1x1_l.png;.`" --add-data `"icon_1x1_p.png;.`" --add-data `"icon_1x2_l.png;.`" --add-data `"icon_1x2_p.png;.`" --add-data `"icon_2x2_l.png;.`" --add-data `"icon_2x2_p.png;.`" --hidden-import=cv2 --hidden-import=pyzbar --hidden-import=pyzbar.pyzbar$dllArgs InvoiceMaster.py"
+          Write-Host "Running: $cmd"
+          Invoke-Expression $cmd
+        shell: pwsh
+        
+      - name: Upload Win10 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartInvoice_For_Win10_11
+          path: dist/智能发票管理助手_Win10现代版.exe

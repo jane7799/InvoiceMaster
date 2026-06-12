@@ -1,0 +1,49 @@
+name: Build for Linux/UOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux-uos:
+    name: Build for Linux/UOS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          # libzbar0 + libzbar-dev: 用于 pyzbar 二维码扫描
+          # libxcb-cursor0: 修复 Qt 光标问题
+          # 注意：PyQt6 通过 pip 安装，不使用系统包（兼容性更好）
+          sudo apt-get install -y libzbar0 libzbar-dev libxcb-cursor0
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+          pip install pymupdf==1.23.26
+          # 【关键】确保安装 opencv-python-headless 和 pyzbar
+          pip install opencv-python-headless pyzbar
+          
+      - name: Verify pyzbar
+        run: |
+          # 【诊断】验证 pyzbar 可以正常导入
+          python -c "from pyzbar.pyzbar import decode; print('pyzbar OK')"
+          
+      - name: Build Linux Binary
+        run: |
+          # Linux 用冒号 :
+          # 【关键】添加 --hidden-import 确保 pyzbar 被正确打包
+          python -m PyInstaller --name "智能发票管理助手_Linux版" --onefile --clean --noconfirm --add-data "qr1.jpg:." --add-data "qr2.jpg:." --add-data "icon_1x1_l.png:." --add-data "icon_1x1_p.png:." --add-data "icon_1x2_l.png:." --add-data "icon_1x2_p.png:." --add-data "icon_2x2_l.png:." --add-data "icon_2x2_p.png:." --hidden-import=cv2 --hidden-import=pyzbar --hidden-import=pyzbar.pyzbar InvoiceMaster.py
+          
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartInvoice_For_Linux_UOS
+          path: dist/智能发票管理助手_Linux版
