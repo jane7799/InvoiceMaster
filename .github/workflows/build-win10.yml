@@ -31,26 +31,10 @@ jobs:
           
       - name: Build Win10 EXE
         run: |
-          # 获取 pyzbar 路径并收集 DLL
-          $pyzbarPath = python -c "import pyzbar; import os; print(os.path.dirname(pyzbar.__file__))"
-          Write-Host "pyzbar path: $pyzbarPath"
-          
-          $dllArgs = ""
-          Get-ChildItem -Path $pyzbarPath -Filter "*.dll" | ForEach-Object {
-            Write-Host "Adding DLL: $($_.Name)"
-            $dllArgs += " --add-binary `"$($_.FullName);pyzbar`""
-          }
-          
-          # 如果没有找到 DLL，输出警告但继续构建
-          if ($dllArgs -eq "") {
-            Write-Host "WARNING: No pyzbar DLLs found! QR code scanning may not work."
-          }
-          
-          # Windows 用分号 ;
-          # 【关键】添加 --hidden-import 和 --add-binary 以确保 pyzbar 正常工作
-          $cmd = "python -m PyInstaller --name `"智能发票管理助手_Win10现代版`" --windowed --onefile --clean --noconfirm --icon=`"logo.ico`" --add-data `"qr1.jpg;.`" --add-data `"qr2.jpg;.`" --add-data `"icon_1x1_l.png;.`" --add-data `"icon_1x1_p.png;.`" --add-data `"icon_1x2_l.png;.`" --add-data `"icon_1x2_p.png;.`" --add-data `"icon_2x2_l.png;.`" --add-data `"icon_2x2_p.png;.`" --hidden-import=cv2 --hidden-import=pyzbar --hidden-import=pyzbar.pyzbar$dllArgs InvoiceMaster.py"
-          Write-Host "Running: $cmd"
-          Invoke-Expression $cmd
+          # 使用 InvoiceMaster.spec 编译，确保 PyQt6 和 DLL 依赖被正确打包
+          python -m PyInstaller --clean --noconfirm InvoiceMaster.spec
+          # 重命名生成的可执行文件
+          Move-Item dist/智能发票打印助手.exe dist/智能发票管理助手_Win10现代版.exe
         shell: pwsh
         
       - name: Upload Win10 Artifact
