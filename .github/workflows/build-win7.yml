@@ -10,6 +10,8 @@ jobs:
   build-win7-legacy:
     name: Build for Windows 7
     runs-on: windows-latest
+    env:
+      PYTHONIOENCODING: utf-8
     steps:
       - uses: actions/checkout@v4
       

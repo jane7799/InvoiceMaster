@@ -46,7 +46,7 @@ try:
                     found_dlls.add(dll)
                     # (源文件路径, 目标目录)
                     pyzbar_binaries.append((dll_path, 'pyzbar'))
-                    print(f"[pyzbar] 找到 DLL: {dll_path}")
+                    print(f"[pyzbar] Found DLL: {dll_path}")
             
             # 同时收集所有 .dll 文件（以防遗漏）
             for pattern in ['*.dll']:
@@ -55,13 +55,13 @@ try:
                     if ('zbar' in dll_name or 'iconv' in dll_name) and dll_name not in found_dlls:
                         found_dlls.add(dll_name)
                         pyzbar_binaries.append((dll_path, 'pyzbar'))
-                        print(f"[pyzbar] 额外找到 DLL: {dll_path}")
+                        print(f"[pyzbar] Extra DLL found: {dll_path}")
 
     if not pyzbar_binaries:
-        print("[警告] 未找到 pyzbar DLL 文件，二维码功能可能无法使用")
-        print(f"[警告] 已搜索路径: {search_paths}")
+        print("[WARNING] pyzbar DLL not found, QR code scanning may not work")
+        print(f"[WARNING] Searched paths: {search_paths}")
 except ImportError:
-    print("[警告] pyzbar 未安装")
+    print("[WARNING] pyzbar not installed")
 
 # 收集 OpenCV DLL 依赖
 cv2_binaries = []
@@ -71,11 +71,11 @@ try:
     for f in os.listdir(cv2_dir):
         if f.endswith('.dll'):
             cv2_binaries.append((os.path.join(cv2_dir, f), 'cv2'))
-            print(f"[cv2] 找到 DLL: {f}")
+            print(f"[cv2] Found DLL: {f}")
     if not cv2_binaries:
-        print("[警告] OpenCV 目录中未找到 DLL 文件")
+        print("[WARNING] OpenCV DLL not found")
 except ImportError:
-    print("[警告] OpenCV (cv2) 未安装")
+    print("[WARNING] OpenCV (cv2) not installed")
 
 # 检测是使用 PyQt6 还是 PyQt5
 qt_impl = 'PyQt6'
@@ -88,7 +88,7 @@ except ImportError:
     except ImportError:
         pass
 
-print(f"[*] PyInstaller spec: 检测到 Qt 实现为 {qt_impl}")
+print(f"[*] PyInstaller spec: Detected Qt implementation: {qt_impl}")
 
 # 将动态检测到的 Qt 隐藏导入加入列表
 qt_hidden_imports = [
