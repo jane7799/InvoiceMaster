@@ -34,6 +34,7 @@ from src.ui.settings_dialog import SettingsDlg
 from src.ui.statistics_dialog import StatisticsDialog
 from src.ui.widgets import Card, GlassCard, DragArea, InvoiceItemWidget
 from src.ui.preview import AdvancedPreviewArea, SingleDocViewer
+from src.ui.print_preview_dialog import PrintPreviewDialog
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -1055,23 +1056,17 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
     
     def _on_pdf_merge_finished(self, out_path):
-        """PDF 合并完成，开始打印"""
+        """PDF 合并完成，打开打印预览对话框"""
         self.pdf_worker = None
-        params = self._print_params
+        self.btn_go.setText(" 开始打印")
+        self.btn_go.setEnabled(True)
         
-        if params["open_only"]:
-            # 仅打开 PDF
-            if platform.system() == "Windows":
-                os.startfile(out_path, "print")
-            elif platform.system() == "Darwin":
-                os.system(f"open '{out_path}'")
-            else:
-                os.system(f"xdg-open '{out_path}'")
-            self.btn_go.setText(" 开始打印")
-            self.btn_go.setEnabled(True)
-        else:
-            # 异步打印
-            self._start_async_print(out_path, params["copies"], params["force_rotate"])
+        # 打开打印预览对话框
+        dlg = PrintPreviewDialog(out_path, self)
+        # 如果主窗口已预选打印机，传递给对话框
+        if self.cb_pr.currentIndex() > 0:
+            dlg.set_printer_name(self.cb_pr.currentText().replace("🖨️ ", ""))
+        dlg.exec()
     
     def _on_pdf_error(self, error_msg):
         """PDF 合并错误"""

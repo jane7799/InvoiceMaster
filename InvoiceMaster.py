@@ -2,10 +2,23 @@
 import sys
 import os
 import platform
-from PyQt6.QtWidgets import QApplication
 
-# 确保 src 目录在 Python 路径中
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 确保 src 目录在 Python 路径中（在 startup_check 之前）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# 启动前环境检查（在导入 Qt 之前执行）
+try:
+    from src.utils.startup_check import check_environment, show_native_error
+    ok, issues = check_environment()
+    if not ok:
+        error_msg = "检测到以下问题：\n\n" + "\n".join(f"• {i}" for i in issues)
+        error_msg += "\n\n程序将尝试继续运行，部分功能可能不可用。"
+        show_native_error("环境检查", error_msg)
+except Exception:
+    # startup_check 本身加载失败，继续运行
+    pass
+
+from PyQt6.QtWidgets import QApplication
 
 from src.utils.log_manager import LogManager
 from src.utils.constants import APP_NAME, APP_VERSION

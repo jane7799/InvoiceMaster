@@ -63,12 +63,28 @@ try:
 except ImportError:
     print("[警告] pyzbar 未安装")
 
+# 收集 OpenCV DLL 依赖
+cv2_binaries = []
+try:
+    import cv2
+    cv2_dir = os.path.dirname(cv2.__file__)
+    for f in os.listdir(cv2_dir):
+        if f.endswith('.dll'):
+            cv2_binaries.append((os.path.join(cv2_dir, f), 'cv2'))
+            print(f"[cv2] 找到 DLL: {f}")
+    if not cv2_binaries:
+        print("[警告] OpenCV 目录中未找到 DLL 文件")
+except ImportError:
+    print("[警告] OpenCV (cv2) 未安装")
+
 a = Analysis(
     ['InvoiceMaster.py'],
     pathex=[],
-    binaries=pyzbar_binaries,
+    binaries=pyzbar_binaries + cv2_binaries,
     datas=[
         ('src/core/license_manager.py', 'src/core'),
+        ('src/utils/startup_check.py', 'src/utils'),
+        ('runtime_hook.py', '.'),
         ('qr1.jpg', '.'),
         ('qr2.jpg', '.'),
         ('icon_1x1_l.png', '.'),
@@ -83,6 +99,7 @@ a = Analysis(
         'PyQt6.QtGui',
         'PyQt6.QtWidgets',
         'PyQt6.QtPrintSupport',
+        'PyQt6.sip',
         'pandas',
         'openpyxl',
         'fitz',
@@ -90,16 +107,21 @@ a = Analysis(
         'cv2',
         'pyzbar',
         'pyzbar.pyzbar',
+        'json',
+        'sqlite3',
+        'concurrent.futures',
         'src.core.database', 'src.core.workers', 'src.core.pdf_engine', 'src.core.print_engine',
-        'src.core.invoice_helper', 'src.core.license_manager', 
+        'src.core.invoice_helper', 'src.core.license_manager',
         'src.utils.log_manager', 'src.utils.icons', 'src.utils.config', 'src.utils.utils',
+        'src.utils.startup_check',
         'src.themes.theme_manager',
-        'src.ui.main_window', 'src.ui.dialogs', 'src.ui.settings_dialog', 
-        'src.ui.statistics_dialog', 'src.ui.widgets', 'src.ui.preview'
+        'src.ui.main_window', 'src.ui.dialogs', 'src.ui.settings_dialog',
+        'src.ui.statistics_dialog', 'src.ui.widgets', 'src.ui.preview',
+        'src.ui.print_preview_dialog',
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['runtime_hook.py'],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
