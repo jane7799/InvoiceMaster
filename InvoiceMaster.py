@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 启用 PyQt5/PyQt6 兼容层（必须在导入任何 Qt 组件之前）
 try:
-    import src.utils.qt_compat
+    import qt_compat
 except Exception as e:
     import traceback
     # 如果在 Windows 平台上，弹窗显示详细错误

@@ -57,7 +57,7 @@ if not pyqt6_available:
         def __getattr__(self, name):
             if hasattr(self._real_qt, name):
                 return getattr(self._real_qt, name)
-            # 返回一个代理，允许任意 of the sub-attributes, e.g., Qt.AlignmentFlag.AlignCenter -> Qt.AlignCenter
+            # 返回一个代理，允许任意的二级属性访问，如 Qt.AlignmentFlag.AlignCenter -> Qt.AlignCenter
             return NamespaceProxy(self._real_qt, name)
 
     class NamespaceProxy:

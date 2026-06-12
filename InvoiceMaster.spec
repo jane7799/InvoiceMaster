@@ -137,7 +137,7 @@ a = Analysis(
         'src.core.database', 'src.core.workers', 'src.core.pdf_engine', 'src.core.print_engine',
         'src.core.invoice_helper', 'src.core.license_manager',
         'src.utils.log_manager', 'src.utils.icons', 'src.utils.config', 'src.utils.utils',
-        'src.utils.startup_check', 'src.utils.qt_compat',
+        'src.utils.startup_check', 'qt_compat',
         'src.themes.theme_manager',
         'src.ui.main_window', 'src.ui.dialogs', 'src.ui.settings_dialog',
         'src.ui.statistics_dialog', 'src.ui.widgets', 'src.ui.preview',

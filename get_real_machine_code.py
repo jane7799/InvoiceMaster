@@ -7,7 +7,7 @@ import platform
 # 确保 src 目录在 Python 路径中
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
-    import src.utils.qt_compat
+    import qt_compat
 except Exception:
     pass
 
