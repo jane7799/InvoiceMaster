@@ -55,3 +55,4 @@ jobs:
         with:
           name: SmartInvoice_Setup_For_Win7
           path: dist_installer/智能发票管理助手_Win7安装包.exe
+          retention-days: 1

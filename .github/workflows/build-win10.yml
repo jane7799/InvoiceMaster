@@ -52,3 +52,4 @@ jobs:
         with:
           name: SmartInvoice_Setup_For_Win10_11
           path: dist_installer/智能发票管理助手_Win10安装包.exe
+          retention-days: 1

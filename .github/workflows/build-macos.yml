@@ -77,3 +77,4 @@ jobs:
         with:
           name: SmartInvoice_For_Mac
           path: dist/智能发票管理助手_Mac版*
+          retention-days: 1
