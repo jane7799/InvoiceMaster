@@ -7,6 +7,8 @@ jobs:
   build-win10-modern:
     name: Build for Windows 10/11
     runs-on: windows-latest
+    permissions:
+      contents: write
     env:
       PYTHONIOENCODING: utf-8
     steps:
@@ -49,7 +51,19 @@ jobs:
 
       - name: Upload Win10 Installer Artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: SmartInvoice_Setup_For_Win10_11
           path: dist_installer/智能发票管理助手_Win10安装包.exe
           retention-days: 1
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: v1.0.2
+          name: "智能发票管理助手 V1.0.2"
+          body: "智能发票管理助手最新全平台发布包。"
+          files: dist_installer/智能发票管理助手_Win10安装包.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
