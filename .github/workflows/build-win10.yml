@@ -31,16 +31,24 @@ jobs:
           python -c "import pyzbar; import os; pyzbar_dir = os.path.dirname(pyzbar.__file__); dlls = [f for f in os.listdir(pyzbar_dir) if f.endswith('.dll')]; print('pyzbar directory:', pyzbar_dir); print('Found DLLs:', dlls)"
         shell: pwsh
           
-      - name: Build Win10 EXE
+      - name: Build Win10 App Folder
         run: |
-          # 使用 InvoiceMaster.spec 编译，确保 PyQt6 和 DLL 依赖被正确打包
+          # 使用 InvoiceMaster.spec 编译成文件夹模式
           python -m PyInstaller --clean --noconfirm InvoiceMaster.spec
-          # 重命名生成的可执行文件
-          Move-Item dist/智能发票打印助手.exe dist/智能发票管理助手_Win10现代版.exe
         shell: pwsh
         
-      - name: Upload Win10 Artifact
+      - name: Build Win10 Inno Setup Installer
+        run: |
+          # 调用 Inno Setup 编译器压制成超高压缩安装包
+          if (Get-Command iscc -ErrorAction SilentlyContinue) {
+            iscc /DOutputFileName="智能发票管理助手_Win10安装包" setup.iss
+          } else {
+            & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DOutputFileName="智能发票管理助手_Win10安装包" setup.iss
+          }
+        shell: pwsh
+
+      - name: Upload Win10 Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SmartInvoice_For_Win10_11
-          path: dist/智能发票管理助手_Win10现代版.exe
+          name: SmartInvoice_Setup_For_Win10_11
+          path: dist_installer/智能发票管理助手_Win10安装包.exe
