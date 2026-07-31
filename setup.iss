@@ -4,8 +4,8 @@
 ; =====================================================================
 
 #define MyAppName "智能发票管理助手"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "InvoiceMaster Team"
+#define MyAppVersion "1.0.2"
+#define MyAppPublisher "会钓鱼的猫"
 #define MyAppExeName "智能发票打印助手.exe"
 #ifndef OutputFileName
   #define OutputFileName "智能发票管理助手_安装包"
@@ -34,7 +34,13 @@ OutputBaseFilename={#OutputFileName}
 PrivilegesRequiredOverridesAllowed=commandline dialog
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[CustomMessages]
+english.CreateDesktopIcon=创建桌面快捷方式(&D)
+english.AdditionalIcons=附加图标:
+english.LaunchProgram=启动 {#MyAppName}
+english.UninstallProgram=卸载 {#MyAppName}
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
